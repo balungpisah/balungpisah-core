@@ -10,6 +10,7 @@ pub struct Config {
     pub swagger: SwaggerConfig,
     pub logto_m2m: LogtoM2MConfig,
     pub minio: MinIOConfig,
+    pub agent_gateway: AgentGatewayConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +62,19 @@ pub struct LogtoM2MConfig {
     pub api_base_url: String,
 }
 
+/// Configuration for the AI Agent Gateway (TensorZero)
+#[derive(Debug, Clone)]
+pub struct AgentGatewayConfig {
+    /// TensorZero gateway URL
+    pub tensorzero_url: String,
+    /// Separate database URL for ADK storage
+    pub database_url: String,
+    /// OpenAI API key for LLM access
+    pub openai_api_key: String,
+    /// Model name to use (default: gpt-5-nano)
+    pub model_name: String,
+}
+
 /// MinIO/S3 storage configuration for file uploads
 #[derive(Debug, Clone)]
 pub struct MinIOConfig {
@@ -101,6 +115,7 @@ impl Config {
             swagger: SwaggerConfig::from_env()?,
             logto_m2m: LogtoM2MConfig::from_env()?,
             minio: MinIOConfig::from_env()?,
+            agent_gateway: AgentGatewayConfig::from_env()?,
         })
     }
 }
@@ -279,6 +294,34 @@ impl LogtoM2MConfig {
             scope,
             token_url,
             api_base_url,
+        })
+    }
+}
+
+impl AgentGatewayConfig {
+    const DEFAULT_TENSORZERO_URL: &'static str = "http://localhost:3001";
+    const DEFAULT_MODEL_NAME: &'static str = "gpt-5-nano";
+
+    pub fn from_env() -> Result<Self, String> {
+        let tensorzero_url =
+            env::var("TENSORZERO_URL").unwrap_or_else(|_| Self::DEFAULT_TENSORZERO_URL.to_string());
+
+        // ADK uses a separate database
+        let database_url = env::var("ADK_DATABASE_URL")
+            .map_err(|_| "ADK_DATABASE_URL environment variable is required".to_string())?;
+
+        // OpenAI API key for LLM access
+        let openai_api_key = env::var("OPENAI_API_KEY")
+            .map_err(|_| "OPENAI_API_KEY environment variable is required".to_string())?;
+
+        let model_name =
+            env::var("AGENT_MODEL_NAME").unwrap_or_else(|_| Self::DEFAULT_MODEL_NAME.to_string());
+
+        Ok(Self {
+            tensorzero_url,
+            database_url,
+            openai_api_key,
+            model_name,
         })
     }
 }
