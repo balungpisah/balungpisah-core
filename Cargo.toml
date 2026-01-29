@@ -8,9 +8,13 @@ name = "balungpisah-core"
 path = "src/main.rs"
 
 [dependencies]
+balungpisah-adk = { path = "../balungpisah-llm-gateway/crates/adk" }
+balungpisah-tensorzero = { path = "../balungpisah-llm-gateway/crates/tensorzero" }
+
 # Web framework
 axum = { version = "0.8.6", features = ["macros", "multipart"] }
 tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
 tower = "0.5.2"
 tower-http = { version = "0.6.6", features = ["cors", "trace", "request-id", "util"] }
 futures = "0.3"
