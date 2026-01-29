@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod citizen_report_agent;
 pub mod contributors;
 pub mod expectations;
 pub mod files;
