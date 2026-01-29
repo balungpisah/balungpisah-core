@@ -8,6 +8,9 @@ use crate::core::openapi::{ApiDoc, SwaggerInfoModifier};
 use crate::core::{database, middleware};
 use crate::features::auth;
 use crate::features::auth::service::AuthService;
+use crate::features::citizen_report_agent::{
+    routes as citizen_agent_routes, AgentRuntimeService, ConversationService,
+};
 use crate::features::contributors::{routes as contributors_routes, ContributorService};
 use crate::features::expectations::{routes as expectations_routes, ExpectationService};
 use crate::features::files::{routes as files_routes, FileService};
@@ -17,6 +20,7 @@ use crate::features::users::{
     clients::logto::LogtoUserProfileClient, routes as users_routes, services::UserProfileService,
 };
 use axum::{middleware::from_fn, Router};
+use balungpisah_adk::Storage;
 use std::sync::Arc;
 use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
@@ -138,6 +142,47 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let contributor_service = Arc::new(ContributorService::new(pool.clone()));
     tracing::info!("Contributor service initialized");
 
+    // Initialize Citizen Report Agent Services
+    // ADK uses a separate database for conversation storage
+    let tensorzero_client =
+        balungpisah_adk::TensorZeroClient::new(&config.agent_gateway.tensorzero_url)
+            .map_err(|e| anyhow::anyhow!("Failed to create TensorZero client: {}", e))?;
+
+    let adk_storage = Arc::new(
+        balungpisah_adk::PostgresStorage::connect_url(&config.agent_gateway.database_url)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to connect to ADK database: {}", e))?,
+    );
+    tracing::info!(
+        "ADK database connection established: {}",
+        config
+            .agent_gateway
+            .database_url
+            .split('@')
+            .next_back()
+            .unwrap_or("***")
+    );
+
+    // Run ADK migrations
+    tracing::info!("Running ADK database migrations...");
+    adk_storage
+        .migrate()
+        .await
+        .map_err(|e| anyhow::anyhow!("ADK migration failed: {}", e))?;
+    tracing::info!("ADK database migrations completed successfully");
+
+    let agent_runtime_service = Arc::new(AgentRuntimeService::new(
+        tensorzero_client,
+        Arc::clone(&adk_storage),
+        config.agent_gateway.openai_api_key.clone(),
+        config.agent_gateway.model_name.clone(),
+    ));
+    let conversation_service = Arc::new(ConversationService::new(Arc::clone(&adk_storage)));
+    tracing::info!(
+        "Citizen report agent services initialized (TensorZero: {})",
+        config.agent_gateway.tensorzero_url
+    );
+
     // Build application router with dynamic swagger config
     let swagger_modifier = SwaggerInfoModifier {
         title: config.swagger.title.clone(),
@@ -167,6 +212,10 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(users_routes::routes(user_profile_service))
         .merge(regions_routes::routes(region_service))
         .merge(files_routes::routes(file_service))
+        .merge(citizen_agent_routes::routes(
+            Arc::clone(&agent_runtime_service),
+            Arc::clone(&conversation_service),
+        ))
         .route_layer(axum::middleware::from_fn_with_state(
             jwt_validator.clone(),
             middleware::auth_middleware,

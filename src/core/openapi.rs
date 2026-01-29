@@ -2,6 +2,9 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
 use crate::features::auth;
+use crate::features::citizen_report_agent::{
+    dtos as citizen_agent_dtos, handlers as citizen_agent_handlers,
+};
 use crate::features::contributors::{dtos as contributors_dtos, handlers as contributors_handlers};
 use crate::features::expectations::{dtos as expectations_dtos, handlers as expectations_handlers};
 use crate::features::files::{dtos as files_dtos, handlers as files_handlers};
@@ -37,6 +40,12 @@ use crate::shared::types::{ApiResponse, Meta};
         expectations_handlers::create_expectation,
         // Contributors (public)
         contributors_handlers::register_contributor,
+        // Citizen Report Agent
+        citizen_agent_handlers::chat_handler::chat_stream,
+        citizen_agent_handlers::chat_handler::chat_sync,
+        citizen_agent_handlers::conversation_handler::list_threads,
+        citizen_agent_handlers::conversation_handler::get_thread,
+        citizen_agent_handlers::conversation_handler::list_messages,
     ),
     components(
         schemas(
@@ -82,6 +91,16 @@ use crate::shared::types::{ApiResponse, Meta};
             contributors_dtos::CreateContributorDto,
             contributors_dtos::ContributorResponseDto,
             ApiResponse<contributors_dtos::ContributorResponseDto>,
+            // Citizen Report Agent
+            citizen_agent_dtos::ChatRequestDto,
+            citizen_agent_dtos::ChatResponseDto,
+            citizen_agent_dtos::ThreadResponseDto,
+            citizen_agent_dtos::ThreadDetailDto,
+            citizen_agent_dtos::MessageResponseDto,
+            ApiResponse<citizen_agent_dtos::ChatResponseDto>,
+            ApiResponse<Vec<citizen_agent_dtos::ThreadResponseDto>>,
+            ApiResponse<citizen_agent_dtos::ThreadDetailDto>,
+            ApiResponse<Vec<citizen_agent_dtos::MessageResponseDto>>,
         )
     ),
     tags(
@@ -91,6 +110,7 @@ use crate::shared::types::{ApiResponse, Meta};
         (name = "files", description = "File upload and management"),
         (name = "expectations", description = "User expectations from landing page (public)"),
         (name = "contributors", description = "Contributor registration (public)"),
+        (name = "citizen-report-agent", description = "AI-powered citizen report assistant"),
     ),
     modifiers(&SecurityAddon),
     info(
