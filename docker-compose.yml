@@ -1,0 +1,24 @@
+services:
+  app:
+    container_name: ${CONTAINER_NAME:-balungpisah-core}
+    image: ${IMAGE_REGISTRY:-balungpisah-core}:${IMAGE_TAG:-latest}
+    ports:
+      - "${HOST_BINDING:-0.0.0.0}:${PORT:-44004}:${PORT:-44004}"
+    env_file:
+      - .env
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '6.0'    # Fokus CPU ke app
+    networks:
+      - default
+
+networks:
+  default:
+    external: true
+    name: ${NETWORK_NAME}

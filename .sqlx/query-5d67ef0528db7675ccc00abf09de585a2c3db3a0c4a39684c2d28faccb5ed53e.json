@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT id, code, name, lat, lng, regency_id, created_at, updated_at\n                    FROM districts\n                    WHERE regency_id = $1 AND (LOWER(name) LIKE $2 OR code LIKE $2)\n                    ORDER BY code ASC\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "lat",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "lng",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "regency_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5d67ef0528db7675ccc00abf09de585a2c3db3a0c4a39684c2d28faccb5ed53e"
+}

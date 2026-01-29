@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT id, code, name, lat, lng, regency_id, created_at, updated_at\n                    FROM districts\n                    WHERE regency_id = $1\n                    ORDER BY code ASC\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "lat",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "lng",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "regency_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6163a55f0b5f8ee7f2af54bda84feb586907c1625c39163be7eb4e9b3b226842"
+}

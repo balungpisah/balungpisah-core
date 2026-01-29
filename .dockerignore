@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+
+# Docker (don't copy these into image)
+docker-compose.yml
+docker-compose.dev.yml
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts - exclude all except cross-compiled binaries
+target/
+!target/x86_64-unknown-linux-gnu/release/balungpisah-core
+
+# Source code (we only need the compiled binaries)
+src/
+*.rs
+Cargo.toml
+Cargo.lock
+.sqlx/
+
+# Development files
+Makefile
+deploy.sh
+rustfmt.toml
+.cargo/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Test databases
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Load testing
+load-tests/

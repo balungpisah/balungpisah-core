@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO files (file_key, original_filename, content_type, file_size, url, visibility, purpose, uploaded_by)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n            RETURNING *\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "file_key",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "original_filename",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "content_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "file_size",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "purpose",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "uploaded_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "visibility",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int8",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c3cde391063c471223cb38523f11f7037ba9fa7c38fbbb28b3ca8f02b42768f6"
+}

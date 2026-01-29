@@ -1,0 +1,94 @@
+[package]
+name = "balungpisah-core"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "balungpisah-core"
+path = "src/main.rs"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8.6", features = ["macros", "multipart"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.6", features = ["cors", "trace", "request-id", "util"] }
+futures = "0.3"
+
+# Database
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Validation
+validator = { version = "0.20.0", features = ["derive"] }
+regex = "1.11"
+lazy_static = "1.5"
+
+# Environment & Config
+dotenvy = "0.15"
+
+# UUID
+uuid = { version = "1.6", features = ["serde", "v4", "v7"] }
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0.17"
+async-trait = "0.1"
+
+# Hex encoding (for various purposes)
+hex = "0.4"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# OpenAPI/Swagger
+utoipa = { version = "5.4.0", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+base64 = "0.22"
+
+# JWT & Authentication
+jsonwebtoken = { version = "10.0.0", default-features = false, features = [
+    "rust_crypto",
+] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Socket configuration for high concurrency
+socket2 = { version = "0.5", features = ["all"] }
+
+# MinIO/S3 Storage (lightweight)
+rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
+
+# HMAC for AWS Signature v4
+hmac = "0.12"
+sha2 = "0.10"
+
+# URL encoding
+urlencoding = "2.1"
+
+[dev-dependencies]
+# Testing
+tokio-test = "0.4"
+axum-test = "18.1.0"
+fake = { version = "4.4.0", features = ["derive", "chrono", "uuid"] }
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "migrate",
+] }
+
+# Git hooks
+cargo-husky = { version = "1", features = ["user-hooks"] }

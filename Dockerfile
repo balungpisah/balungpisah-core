@@ -1,0 +1,22 @@
+# Dockerfile for pre-built cross-compiled binaries
+# Build the binaries locally with: cargo zigbuild --release --target x86_64-unknown-linux-gnu
+# This is MUCH faster than building inside Docker with QEMU emulation on ARM Macs
+
+FROM debian:bookworm-slim
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the pre-built binary (cross-compiled for x86_64-unknown-linux-gnu)
+COPY target/x86_64-unknown-linux-gnu/release/balungpisah-core .
+
+# Copy migrations (needed for runtime migration execution)
+COPY migrations ./migrations
+
+# Default: run the API server (can be overridden in docker-compose)
+CMD ["./balungpisah-core"]
