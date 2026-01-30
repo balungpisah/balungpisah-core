@@ -5,6 +5,7 @@ use axum::{
     response::{sse::Event, IntoResponse, Response, Sse},
     Json,
 };
+use balungpisah_adk::{ContentBlock, MessageContent};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use validator::Validate;
@@ -13,13 +14,33 @@ use crate::core::error::{AppError, Result};
 use crate::features::auth::model::AuthenticatedUser;
 use crate::shared::types::ApiResponse;
 
-use super::super::dtos::{ChatRequestDto, ChatResponseDto};
+use super::super::dtos::{ChatRequestDto, ChatResponseDto, ContentBlockInput, MessageContentInput};
 use super::super::services::AgentRuntimeService;
 
 /// State for chat handlers
 #[derive(Clone)]
 pub struct ChatState {
     pub agent_runtime: Arc<AgentRuntimeService>,
+}
+
+/// Convert MessageContentInput (DTO) to MessageContent (ADK)
+fn convert_content(input: MessageContentInput) -> MessageContent {
+    match input {
+        MessageContentInput::Text(text) => MessageContent::Text(text),
+        MessageContentInput::Blocks(blocks) => {
+            let content_blocks: Vec<ContentBlock> = blocks
+                .into_iter()
+                .map(|b| match b {
+                    ContentBlockInput::Text { text } => ContentBlock::text(text),
+                    ContentBlockInput::File { url } => ContentBlock::file_from_url(url, None),
+                    ContentBlockInput::FileData { mime_type, data } => {
+                        ContentBlock::file_from_base64(data, mime_type)
+                    }
+                })
+                .collect();
+            MessageContent::Blocks(content_blocks)
+        }
+    }
 }
 
 /// Parse a raw SSE string into event type and data.
@@ -74,6 +95,9 @@ pub async fn chat_stream(
     dto.validate()
         .map_err(|e| AppError::Validation(format!("Invalid request: {}", e)))?;
 
+    // Convert DTO content to ADK MessageContent
+    let content = convert_content(dto.content);
+
     // Start streaming chat - returns raw SSE strings from ADK
     let (_thread_id, rx) = state
         .agent_runtime
@@ -81,7 +105,7 @@ pub async fn chat_stream(
             &user.account_id,
             dto.thread_id,
             dto.user_message_id,
-            &dto.message,
+            content,
         )
         .await?;
 
@@ -136,10 +160,13 @@ pub async fn chat_sync(
     dto.validate()
         .map_err(|e| AppError::Validation(format!("Invalid request: {}", e)))?;
 
+    // Convert DTO content to ADK MessageContent
+    let content = convert_content(dto.content);
+
     // Send chat message
     let (thread_id, response, episode_id) = state
         .agent_runtime
-        .chat_sync(&user.account_id, dto.thread_id, &dto.message)
+        .chat_sync(&user.account_id, dto.thread_id, content)
         .await?;
 
     let response_dto = ChatResponseDto {

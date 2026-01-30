@@ -97,13 +97,13 @@ impl AgentRuntimeService {
         &self,
         external_id: &str,
         thread_id: Option<Uuid>,
-        message: &str,
+        content: MessageContent,
     ) -> Result<(Uuid, String, Uuid)> {
         let thread = self.get_or_create_thread(external_id, thread_id).await?;
         let agent = self.build_agent()?;
 
         let response = agent
-            .chat(thread.id, message)
+            .chat(thread.id, content)
             .await
             .map_err(|e| AppError::ExternalServiceError(format!("Chat failed: {}", e)))?;
 
@@ -134,12 +134,12 @@ impl AgentRuntimeService {
         external_id: &str,
         thread_id: Option<Uuid>,
         user_message_id: Option<Uuid>,
-        message: &str,
+        content: MessageContent,
     ) -> Result<(Uuid, mpsc::Receiver<String>)> {
         let agent = self.build_agent()?;
 
         // Build the chat request with full lifecycle support
-        let mut request = ChatRequest::new(MessageContent::Text(message.to_string()));
+        let mut request = ChatRequest::new(content);
 
         if let Some(tid) = thread_id {
             request = request.thread_id(tid);

@@ -3,6 +3,28 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use validator::Validate;
 
+/// Message content input (can be string or blocks)
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+#[serde(untagged)]
+pub enum MessageContentInput {
+    /// Simple text message
+    Text(String),
+    /// Multi-modal content blocks
+    Blocks(Vec<ContentBlockInput>),
+}
+
+/// Content block input for multimodal messages
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentBlockInput {
+    /// Text content
+    Text { text: String },
+    /// File reference by URL
+    File { url: String },
+    /// File with inline base64 data
+    FileData { mime_type: String, data: String },
+}
+
 /// Request DTO for sending a chat message
 #[derive(Debug, Clone, Deserialize, Validate, ToSchema)]
 pub struct ChatRequestDto {
@@ -19,13 +41,8 @@ pub struct ChatRequestDto {
     ///   all subsequent messages in the thread are deleted before generating a new response.
     pub user_message_id: Option<Uuid>,
 
-    /// The user's message (1-10000 characters)
-    #[validate(length(
-        min = 1,
-        max = 10000,
-        message = "Message must be between 1 and 10000 characters"
-    ))]
-    pub message: String,
+    /// The message content (text string or multimodal blocks)
+    pub content: MessageContentInput,
 }
 
 /// Response DTO for synchronous chat
