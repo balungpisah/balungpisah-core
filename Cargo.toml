@@ -8,8 +8,8 @@ name = "balungpisah-core"
 path = "src/main.rs"
 
 [dependencies]
-balungpisah-adk = { path = "../balungpisah-llm-gateway/crates/adk" }
-balungpisah-tensorzero = { path = "../balungpisah-llm-gateway/crates/tensorzero" }
+balungpisah-adk = { git = "https://github.com/balungpisah/balungpisah-llm-gateway.git", branch = "main" }
+balungpisah-tensorzero = { git = "https://github.com/balungpisah/balungpisah-llm-gateway.git", branch = "main" }
 
 # Web framework
 axum = { version = "0.8.6", features = ["macros", "multipart"] }

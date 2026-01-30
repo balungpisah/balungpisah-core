@@ -1,24 +1,29 @@
+# Docker Compose for contributors and self-hosting
+# Builds the image from source code
+#
+# Usage:
+#   git clone https://github.com/balungpisah/balungpisah-core.git
+#   cd balungpisah-core
+#   cp .env.example .env
+#   # Edit .env with your configuration
+#   docker compose up -d
+#
+# For production deployments (pulling from registry), see docker-compose.prod.yml
+
 services:
   app:
-    container_name: ${CONTAINER_NAME:-balungpisah-core}
-    image: ${IMAGE_REGISTRY:-balungpisah-core}:${IMAGE_TAG:-latest}
+    container_name: balungpisah-core
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "${HOST_BINDING:-0.0.0.0}:${PORT:-44004}:${PORT:-44004}"
+      - "${HOST_BINDING:-127.0.0.1}:${PORT:-3000}:${PORT:-3000}"
     env_file:
       - .env
-    ulimits:
-      nofile:
-        soft: 1048576
-        hard: 1048576
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '6.0'    # Fokus CPU ke app
     networks:
-      - default
+      - balungpisah
 
 networks:
-  default:
-    external: true
-    name: ${NETWORK_NAME}
+  balungpisah:
+    driver: bridge

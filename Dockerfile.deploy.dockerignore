@@ -1,0 +1,62 @@
+# Dockerignore for Dockerfile.deploy (pre-built binary workflow)
+# Only include what's needed: the binary and migrations
+
+# Git
+.git
+.gitignore
+
+# Docker files
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+
+# Source code (not needed - using pre-built binary)
+src/
+*.rs
+Cargo.toml
+Cargo.lock
+.sqlx/
+
+# Exclude native target builds (keep cross-compiled)
+target/debug/
+target/release/
+target/.rustc_info.json
+target/.cargo-lock
+target/CACHEDIR.TAG
+
+# Development files
+Makefile
+rustfmt.toml
+.cargo/
+scripts/
+
+# Environment files
+.env
+.env.*
+
+# Test databases
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Load testing
+load-tests/
+
+# Claude/AI files
+.auto-claude/
+.claude*
+CLAUDE.md

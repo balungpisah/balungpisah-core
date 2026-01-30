@@ -2,9 +2,9 @@
 .git
 .gitignore
 
-# Docker (don't copy these into image)
-docker-compose.yml
-docker-compose.dev.yml
+# Docker files (don't copy into image)
+docker-compose*.yml
+Dockerfile*
 .dockerignore
 
 # Documentation
@@ -15,24 +15,18 @@ docs/
 .vscode/
 .idea/
 
-# Build artifacts - exclude all except cross-compiled binaries
+# Build artifacts (will be rebuilt in container)
 target/
-!target/x86_64-unknown-linux-gnu/release/balungpisah-core
-
-# Source code (we only need the compiled binaries)
-src/
-*.rs
-Cargo.toml
-Cargo.lock
-.sqlx/
 
 # Development files
 Makefile
-deploy.sh
 rustfmt.toml
 .cargo/
 
-# Environment files
+# Scripts (not needed in image)
+scripts/
+
+# Environment files (use env_file in compose instead)
 .env
 .env.*
 !.env.example
@@ -50,3 +44,8 @@ Thumbs.db
 
 # Load testing
 load-tests/
+
+# Claude/AI files
+.auto-claude/
+.claude*
+CLAUDE.md

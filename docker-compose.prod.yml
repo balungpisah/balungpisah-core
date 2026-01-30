@@ -1,0 +1,21 @@
+# Docker Compose for production server
+# Pulls pre-built image from GitHub Container Registry
+#
+# Prerequisites:
+#   1. Login to GHCR: docker login ghcr.io
+#   2. Create .env with production configuration
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Note: This file is used by the maintainer's deploy.sh script
+
+services:
+  app:
+    container_name: ${CONTAINER_NAME:-balungpisah-core}
+    image: ${IMAGE_REGISTRY:-ghcr.io/balungpisah/balungpisah-core}:${IMAGE_TAG:-latest}
+    network_mode: host
+    env_file:
+      - .env
+    restart: unless-stopped
