@@ -7,6 +7,7 @@ pub struct Config {
     pub app: AppConfig,
     pub database: DatabaseConfig,
     pub auth: AuthConfig,
+    pub auth_token: AuthTokenConfig,
     pub swagger: SwaggerConfig,
     pub logto_m2m: LogtoM2MConfig,
     pub minio: MinIOConfig,
@@ -75,6 +76,22 @@ pub struct AgentGatewayConfig {
     pub model_name: String,
 }
 
+/// Configuration for Logto token exchange (for register/login flows on mobile)
+/// Uses Logto's subject token + token exchange to get proper OIDC access tokens
+#[derive(Debug, Clone)]
+pub struct AuthTokenConfig {
+    /// Application client ID for token exchange (must have "Token exchange" enabled in Logto Console)
+    pub token_exchange_app_id: String,
+    /// Application client secret for token exchange
+    pub token_exchange_app_secret: String,
+    /// API resource identifier for access tokens (same as LOGTO_AUDIENCE)
+    pub api_resource: String,
+    /// Scopes to request for access tokens (space-separated)
+    pub token_scopes: String,
+    /// OIDC token endpoint URL (derived from LOGTO_ISSUER)
+    pub oidc_token_url: String,
+}
+
 /// MinIO/S3 storage configuration for file uploads
 #[derive(Debug, Clone)]
 pub struct MinIOConfig {
@@ -112,6 +129,7 @@ impl Config {
             app: AppConfig::from_env()?,
             database: DatabaseConfig::from_env()?,
             auth: AuthConfig::from_env()?,
+            auth_token: AuthTokenConfig::from_env()?,
             swagger: SwaggerConfig::from_env()?,
             logto_m2m: LogtoM2MConfig::from_env()?,
             minio: MinIOConfig::from_env()?,
@@ -322,6 +340,38 @@ impl AgentGatewayConfig {
             database_url,
             openai_api_key,
             model_name,
+        })
+    }
+}
+
+impl AuthTokenConfig {
+    pub fn from_env() -> Result<Self, String> {
+        let token_exchange_app_id = env::var("TOKEN_EXCHANGE_APP_ID")
+            .map_err(|_| "TOKEN_EXCHANGE_APP_ID environment variable is required".to_string())?;
+
+        let token_exchange_app_secret = env::var("TOKEN_EXCHANGE_APP_SECRET").map_err(|_| {
+            "TOKEN_EXCHANGE_APP_SECRET environment variable is required".to_string()
+        })?;
+
+        // Use LOGTO_AUDIENCE as the API resource
+        let api_resource = env::var("LOGTO_AUDIENCE")
+            .map_err(|_| "LOGTO_AUDIENCE environment variable is required".to_string())?;
+
+        // Include offline_access scope to get refresh tokens
+        let token_scopes = env::var("TOKEN_EXCHANGE_SCOPES")
+            .unwrap_or_else(|_| "openid profile email offline_access".to_string());
+
+        // Derive OIDC token URL from LOGTO_ISSUER
+        let issuer = env::var("LOGTO_ISSUER")
+            .map_err(|_| "LOGTO_ISSUER environment variable is required".to_string())?;
+        let oidc_token_url = format!("{}/token", issuer);
+
+        Ok(Self {
+            token_exchange_app_id,
+            token_exchange_app_secret,
+            api_resource,
+            token_scopes,
+            oidc_token_url,
         })
     }
 }
