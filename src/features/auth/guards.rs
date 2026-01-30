@@ -25,6 +25,7 @@ use axum::{extract::FromRequestParts, http::request::Parts};
 /// ```ignore
 /// pub async fn handler(RequireSuperAdmin(user): RequireSuperAdmin) { ... }
 /// ```
+#[allow(dead_code)]
 pub struct RequireSuperAdmin(pub AuthenticatedUser);
 
 impl<S> FromRequestParts<S> for RequireSuperAdmin

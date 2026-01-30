@@ -10,7 +10,7 @@ pub fn create_super_admin_user() -> AuthenticatedUser {
     AuthenticatedUser {
         account_id: "test-account-id".to_string(),
         sub: "test-sub".to_string(),
-        session_uid: "test-session-uid".to_string(),
+        session_uid: Some("test-session-uid".to_string()),
         roles: vec!["super_admin".to_string()],
     }
 }
