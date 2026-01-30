@@ -8,7 +8,9 @@ use super::model::AuthenticatedUser;
 pub struct MeResponseDto {
     pub account_id: String,
     pub sub: String,
-    pub session_uid: String,
+    /// Session UID (only present for interactive OIDC flows, not for token exchange)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_uid: Option<String>,
     pub roles: Vec<String>,
 }
 

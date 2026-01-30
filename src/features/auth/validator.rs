@@ -17,30 +17,40 @@ pub struct JwtValidator {
 #[derive(Debug, Clone, Deserialize)]
 struct Claims {
     // Standard JWT claims (validated by jsonwebtoken library)
-    #[serde(rename = "jti")]
-    _jti: String,
+    #[serde(rename = "jti", default)]
+    _jti: Option<String>,
     sub: String,
     #[serde(rename = "iss")]
     _iss: String,
     #[serde(rename = "aud")]
-    _aud: String,
+    _aud: AudienceClaim,
     #[serde(rename = "iat")]
     _iat: u64,
     #[serde(rename = "exp")]
     _exp: u64,
 
-    // Logto-specific claims
-    kind: String,
-    #[serde(alias = "client_id")]
-    _client_id: String,
-    #[serde(rename = "accountId")]
-    account_id: String,
-    #[serde(rename = "sessionUid")]
-    session_uid: String,
+    // Logto-specific claims (some may be optional for token exchange tokens)
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(alias = "client_id", default)]
+    _client_id: Option<String>,
+    #[serde(rename = "accountId", default)]
+    account_id: Option<String>,
+    #[serde(rename = "sessionUid", default)]
+    session_uid: Option<String>,
 
     // Custom claims - configure your own namespace in your OIDC provider
-    #[serde(rename = "https://balungpisah.id/claims")]
-    custom_claims: CustomClaims,
+    #[serde(rename = "https://balungpisah.id/claims", default)]
+    custom_claims: Option<CustomClaims>,
+}
+
+/// Audience can be either a single string or an array of strings
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+#[allow(dead_code)]
+enum AudienceClaim {
+    Single(String),
+    Multiple(Vec<String>),
 }
 
 impl JwtValidator {
@@ -94,24 +104,36 @@ impl JwtValidator {
 
         let claims = token_data.claims;
 
-        // Additional validation: check token kind
-        if claims.kind != "AccessToken" {
-            return Err(AppError::Auth("Token is not an access token".to_string()));
+        // Additional validation: check token kind (if present)
+        // Token exchange tokens may not have the 'kind' claim
+        if let Some(kind) = &claims.kind {
+            if kind != "AccessToken" {
+                return Err(AppError::Auth("Token is not an access token".to_string()));
+            }
         }
 
-        // Validate this is a global token (not organization-scoped)
-        if claims.custom_claims.token_type != "global" {
-            return Err(AppError::Auth(
-                "This service requires a global access token".to_string(),
-            ));
-        }
+        // Validate this is a global token (if custom claims are present)
+        // Extract roles from custom claims
+        let roles = if let Some(custom) = &claims.custom_claims {
+            if custom.token_type != "global" {
+                return Err(AppError::Auth(
+                    "This service requires a global access token".to_string(),
+                ));
+            }
+            custom.roles.clone()
+        } else {
+            Vec::new()
+        };
 
         // Convert to AuthenticatedUser
+        // For token exchange tokens, account_id may not be present, use sub instead
+        let account_id = claims.account_id.unwrap_or_else(|| claims.sub.clone());
+
         Ok(AuthenticatedUser {
-            account_id: claims.account_id,
+            account_id,
             sub: claims.sub,
             session_uid: claims.session_uid,
-            roles: claims.custom_claims.roles,
+            roles,
         })
     }
 }
