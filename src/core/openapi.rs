@@ -16,7 +16,10 @@ use crate::shared::types::{ApiResponse, Meta};
 #[openapi(
     paths(
         // Auth
-        auth::handler::get_me,
+        auth::handlers::register,
+        auth::handlers::login,
+        auth::handlers::refresh_token,
+        auth::handlers::get_me,
         // Users
         profile_handler::get_profile,
         profile_handler::update_basic_profile,
@@ -54,7 +57,15 @@ use crate::shared::types::{ApiResponse, Meta};
             // Auth
             auth::dto::MeResponseDto,
             auth::model::AuthenticatedUser,
+            auth::dtos::RegisterRequestDto,
+            auth::dtos::LoginRequestDto,
+            auth::dtos::RefreshTokenRequestDto,
+            auth::dtos::RefreshTokenResponseDto,
+            auth::dtos::AuthResponseDto,
+            auth::dtos::AuthUserDto,
             ApiResponse<auth::dto::MeResponseDto>,
+            ApiResponse<auth::dtos::AuthResponseDto>,
+            ApiResponse<auth::dtos::RefreshTokenResponseDto>,
             // Users
             users_dtos::UserProfileResponseDto,
             users_dtos::ExtendedProfileDto,

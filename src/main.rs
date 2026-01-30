@@ -7,7 +7,9 @@ use crate::core::config::Config;
 use crate::core::openapi::{ApiDoc, SwaggerInfoModifier};
 use crate::core::{database, middleware};
 use crate::features::auth;
-use crate::features::auth::service::AuthService;
+use crate::features::auth::clients::LogtoAuthClient;
+use crate::features::auth::routes as auth_routes;
+use crate::features::auth::services::{AuthService, TokenService};
 use crate::features::citizen_report_agent::{
     routes as citizen_agent_routes, AgentRuntimeService, ConversationService,
 };
@@ -99,11 +101,23 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     ));
     tracing::info!("Auth configuration initialized");
 
-    // Initialize services
-    let auth_service = Arc::new(AuthService::new());
-
-    // Initialize users service with LogtoTokenManager
+    // Initialize Logto Token Manager (used by multiple services)
     let logto_token_manager = Arc::new(LogtoTokenManager::new(config.logto_m2m.clone()));
+    tracing::info!("Logto token manager initialized");
+
+    // Initialize auth services (for register/login via Logto token exchange)
+    let logto_auth_client = Arc::new(LogtoAuthClient::new(Arc::clone(&logto_token_manager)));
+    let token_service = Arc::new(TokenService::new(
+        config.auth_token.clone(),
+        Arc::clone(&logto_token_manager),
+    ));
+    let auth_service = Arc::new(AuthService::new(
+        Arc::clone(&logto_auth_client),
+        Arc::clone(&token_service),
+    ));
+    tracing::info!("Auth service initialized (with Logto token exchange)");
+
+    // Initialize users service (reusing LogtoTokenManager)
     let logto_user_profile_client = Arc::new(LogtoUserProfileClient::new(Arc::clone(
         &logto_token_manager,
     )));
@@ -208,7 +222,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
 
     // Protected routes (require JWT authentication)
     let protected_routes = Router::new()
-        .merge(auth::routes::routes(auth_service))
+        .merge(auth_routes::protected_routes(Arc::clone(&auth_service)))
         .merge(users_routes::routes(user_profile_service))
         .merge(regions_routes::routes(region_service))
         .merge(files_routes::routes(file_service))
@@ -229,6 +243,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
 
     // Public routes (no auth required)
     let public_routes = Router::new()
+        .merge(auth_routes::public_routes(auth_service))
         .merge(expectations_routes::routes(expectation_service))
         .merge(contributors_routes::routes(contributor_service));
 
