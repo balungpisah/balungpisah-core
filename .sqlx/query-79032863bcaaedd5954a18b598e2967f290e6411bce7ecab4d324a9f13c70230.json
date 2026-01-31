@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, name, description, center_lat, center_lon,\n                radius_meters, report_count,\n                status as \"status: ClusterStatus\",\n                created_at, updated_at\n            FROM report_clusters\n            WHERE status = 'active'\n            AND center_lat BETWEEN $1 AND $2\n            AND center_lon BETWEEN $3 AND $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "center_lat",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "center_lon",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "radius_meters",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "report_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "status: ClusterStatus",
+        "type_info": {
+          "Custom": {
+            "name": "cluster_status",
+            "kind": {
+              "Enum": [
+                "active",
+                "monitoring",
+                "resolved",
+                "archived"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8",
+        "Float8",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "79032863bcaaedd5954a18b598e2967f290e6411bce7ecab4d324a9f13c70230"
+}

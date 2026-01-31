@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE report_clusters\n            SET\n                center_lat = (center_lat * report_count + $2) / (report_count + 1),\n                center_lon = (center_lon * report_count + $3) / (report_count + 1),\n                report_count = report_count + 1,\n                updated_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cbde214c5ce8fc147cf2cce5133aa80b32bf5d3739baca4626cb38528dd1f257"
+}

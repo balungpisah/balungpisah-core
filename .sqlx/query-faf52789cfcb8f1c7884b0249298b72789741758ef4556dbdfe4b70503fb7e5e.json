@@ -1,0 +1,174 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO report_locations (\n                report_id, raw_input, display_name, lat, lon,\n                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,\n                bounding_box, geocoding_source, geocoding_score, geocoded_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())\n            RETURNING\n                id, report_id, raw_input, display_name, lat, lon,\n                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,\n                bounding_box, geocoding_source as \"geocoding_source: GeocodingSource\",\n                geocoding_score, geocoded_at, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "report_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "raw_input",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "lat",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "lon",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "osm_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "osm_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "road",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "neighbourhood",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "suburb",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "city",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "state",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "postcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "country_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 15,
+        "name": "bounding_box",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 16,
+        "name": "geocoding_source: GeocodingSource",
+        "type_info": {
+          "Custom": {
+            "name": "geocoding_source",
+            "kind": {
+              "Enum": [
+                "nominatim",
+                "manual",
+                "fallback"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "geocoding_score",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 18,
+        "name": "geocoded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Float8",
+        "Float8",
+        "Int8",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Jsonb",
+        {
+          "Custom": {
+            "name": "geocoding_source",
+            "kind": {
+              "Enum": [
+                "nominatim",
+                "manual",
+                "fallback"
+              ]
+            }
+          }
+        },
+        "Numeric"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "faf52789cfcb8f1c7884b0249298b72789741758ef4556dbdfe4b70503fb7e5e"
+}

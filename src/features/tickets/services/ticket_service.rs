@@ -61,6 +61,7 @@ impl TicketService {
                 confidence_score, completeness_score, missing_fields, preliminary_data,
                 status as "status: TicketStatus",
                 submitted_at, processed_at, error_message, retry_count,
+                last_attempt_at, report_id,
                 created_at, updated_at
             "#,
             adk_thread_id,
@@ -100,6 +101,7 @@ impl TicketService {
                 confidence_score, completeness_score, missing_fields, preliminary_data,
                 status as "status: TicketStatus",
                 submitted_at, processed_at, error_message, retry_count,
+                last_attempt_at, report_id,
                 created_at, updated_at
             FROM tickets
             WHERE id = $1 AND user_id = $2
@@ -133,6 +135,7 @@ impl TicketService {
                 confidence_score, completeness_score, missing_fields, preliminary_data,
                 status as "status: TicketStatus",
                 submitted_at, processed_at, error_message, retry_count,
+                last_attempt_at, report_id,
                 created_at, updated_at
             FROM tickets
             WHERE reference_number = $1 AND user_id = $2
@@ -162,6 +165,7 @@ impl TicketService {
                 confidence_score, completeness_score, missing_fields, preliminary_data,
                 status as "status: TicketStatus",
                 submitted_at, processed_at, error_message, retry_count,
+                last_attempt_at, report_id,
                 created_at, updated_at
             FROM tickets
             WHERE user_id = $1

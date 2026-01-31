@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO tickets (\n                adk_thread_id, user_id, reference_number, platform, confidence_score, status\n            ) VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING\n                id, adk_thread_id, user_id, reference_number, platform,\n                confidence_score, completeness_score, missing_fields, preliminary_data,\n                status as \"status: TicketStatus\",\n                submitted_at, processed_at, error_message, retry_count,\n                created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO tickets (\n                adk_thread_id, user_id, reference_number, platform, confidence_score, status\n            ) VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING\n                id, adk_thread_id, user_id, reference_number, platform,\n                confidence_score, completeness_score, missing_fields, preliminary_data,\n                status as \"status: TicketStatus\",\n                submitted_at, processed_at, error_message, retry_count,\n                last_attempt_at, report_id,\n                created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -87,11 +87,21 @@
       },
       {
         "ordinal": 14,
-        "name": "created_at",
+        "name": "last_attempt_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 15,
+        "name": "report_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -133,9 +143,11 @@
       true,
       true,
       false,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "25bdb81e4487ff42c12509c13779231e87e121fe4a2e0d17bc6d06f2c3a3912a"
+  "hash": "2dd380c252b198f41efd45ec5ca00cf484e5671977ff79570bdd332e9df212b1"
 }

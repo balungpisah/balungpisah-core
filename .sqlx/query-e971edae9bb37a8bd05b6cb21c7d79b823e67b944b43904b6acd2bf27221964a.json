@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, adk_thread_id, user_id, reference_number, platform,\n                confidence_score, completeness_score, missing_fields, preliminary_data,\n                status as \"status: TicketStatus\",\n                submitted_at, processed_at, error_message, retry_count,\n                created_at, updated_at\n            FROM tickets\n            WHERE user_id = $1\n            ORDER BY created_at DESC\n            ",
+  "query": "\n            SELECT\n                id, adk_thread_id, user_id, reference_number, platform,\n                confidence_score, completeness_score, missing_fields, preliminary_data,\n                status as \"status: TicketStatus\",\n                submitted_at, processed_at, error_message, retry_count,\n                last_attempt_at, report_id,\n                created_at, updated_at\n            FROM tickets\n            WHERE reference_number = $1 AND user_id = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -87,17 +87,28 @@
       },
       {
         "ordinal": 14,
-        "name": "created_at",
+        "name": "last_attempt_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 15,
+        "name": "report_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Text"
       ]
     },
@@ -116,9 +127,11 @@
       true,
       true,
       false,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "51e428e6146294964fe662f3efbb2275de766481fb49f892cec96ed12dfd7416"
+  "hash": "e971edae9bb37a8bd05b6cb21c7d79b823e67b944b43904b6acd2bf27221964a"
 }

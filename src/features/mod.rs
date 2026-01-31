@@ -6,5 +6,6 @@ pub mod expectations;
 pub mod files;
 pub mod logto;
 pub mod regions;
+pub mod reports;
 pub mod tickets;
 pub mod users;

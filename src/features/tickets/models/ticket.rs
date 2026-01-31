@@ -44,6 +44,8 @@ pub struct Ticket {
     pub processed_at: Option<DateTime<Utc>>,
     pub error_message: Option<String>,
     pub retry_count: i32,
+    pub last_attempt_at: Option<DateTime<Utc>>,
+    pub report_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

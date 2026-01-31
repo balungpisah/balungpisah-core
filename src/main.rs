@@ -19,7 +19,12 @@ use crate::features::expectations::{routes as expectations_routes, ExpectationSe
 use crate::features::files::{routes as files_routes, FileService};
 use crate::features::logto::token_manager::LogtoTokenManager;
 use crate::features::regions::{routes as regions_routes, RegionService};
-use crate::features::tickets::{routes as tickets_routes, TicketService};
+use crate::features::reports::{
+    routes as reports_routes, ClusteringService, GeocodingService, ReportService,
+};
+use crate::features::tickets::{
+    routes as tickets_routes, ExtractionService, TicketProcessor, TicketService,
+};
 use crate::features::users::{
     clients::logto::LogtoUserProfileClient, routes as users_routes, services::UserProfileService,
 };
@@ -166,6 +171,12 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let ticket_service = Arc::new(TicketService::new(pool.clone()));
     tracing::info!("Ticket service initialized");
 
+    // Initialize Report Services
+    let report_service = Arc::new(ReportService::new(pool.clone()));
+    let geocoding_service = Arc::new(GeocodingService::new());
+    let clustering_service = Arc::new(ClusteringService::new(pool.clone()));
+    tracing::info!("Report services initialized");
+
     // Initialize Citizen Report Agent Services
     // ADK uses a separate database for conversation storage
     let tensorzero_client =
@@ -194,6 +205,41 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("ADK migration failed: {}", e))?;
     tracing::info!("ADK database migrations completed successfully");
+
+    // Initialize Extraction Service (uses TensorZero + ADK for LLM calls)
+    let extraction_service = match ExtractionService::new(
+        &config.agent_gateway.tensorzero_url,
+        config.agent_gateway.openai_api_key.clone(),
+        config.agent_gateway.model_name.clone(),
+        Arc::clone(&adk_storage),
+    ) {
+        Ok(service) => {
+            tracing::info!("Extraction service initialized (TensorZero + OpenAI)");
+            Some(Arc::new(service))
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Extraction service not available: {}. Ticket processing worker will not run.",
+                e
+            );
+            None
+        }
+    };
+
+    // Spawn Ticket Processor Worker (if extraction service is available)
+    if let Some(extraction_svc) = extraction_service {
+        let processor = TicketProcessor::new(
+            pool.clone(),
+            extraction_svc,
+            Arc::clone(&geocoding_service),
+            Arc::clone(&clustering_service),
+            Arc::clone(&report_service),
+        );
+        tokio::spawn(async move {
+            processor.run().await;
+        });
+        tracing::info!("Ticket processor worker spawned");
+    }
 
     // Create tool registry with database pool for ticket creation
     let tool_registry = create_tool_registry(Arc::new(pool.clone()));
@@ -245,6 +291,10 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(regions_routes::routes(region_service))
         .merge(files_routes::routes(file_service))
         .merge(tickets_routes::routes(Arc::clone(&ticket_service)))
+        .merge(reports_routes::routes(
+            Arc::clone(&report_service),
+            Arc::clone(&clustering_service),
+        ))
         .merge(citizen_agent_routes::routes(
             Arc::clone(&agent_runtime_service),
             Arc::clone(&conversation_service),
