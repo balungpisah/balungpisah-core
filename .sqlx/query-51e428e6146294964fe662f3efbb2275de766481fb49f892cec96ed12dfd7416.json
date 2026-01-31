@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, adk_thread_id, user_id, reference_number, platform,\n                confidence_score, completeness_score, missing_fields, preliminary_data,\n                status as \"status: TicketStatus\",\n                submitted_at, processed_at, error_message, retry_count,\n                created_at, updated_at\n            FROM tickets\n            WHERE user_id = $1\n            ORDER BY created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "adk_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "reference_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "platform",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "confidence_score",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "completeness_score",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "missing_fields",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "preliminary_data",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "status: TicketStatus",
+        "type_info": {
+          "Custom": {
+            "name": "ticket_status",
+            "kind": {
+              "Enum": [
+                "submitted",
+                "processing",
+                "completed",
+                "failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "processed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "error_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "retry_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "51e428e6146294964fe662f3efbb2275de766481fb49f892cec96ed12dfd7416"
+}

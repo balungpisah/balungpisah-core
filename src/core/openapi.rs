@@ -2,6 +2,7 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
 use crate::features::auth;
+use crate::features::categories::{dtos as categories_dtos, handlers as categories_handlers};
 use crate::features::citizen_report_agent::{
     dtos as citizen_agent_dtos, handlers as citizen_agent_handlers,
 };
@@ -9,6 +10,9 @@ use crate::features::contributors::{dtos as contributors_dtos, handlers as contr
 use crate::features::expectations::{dtos as expectations_dtos, handlers as expectations_handlers};
 use crate::features::files::{dtos as files_dtos, handlers as files_handlers};
 use crate::features::regions::{dtos as regions_dtos, handlers as regions_handlers};
+use crate::features::tickets::{
+    dtos as tickets_dtos, handlers as tickets_handlers, models as tickets_models,
+};
 use crate::features::users::{dtos as users_dtos, handlers::profile_handler};
 use crate::shared::types::{ApiResponse, Meta};
 
@@ -43,6 +47,13 @@ use crate::shared::types::{ApiResponse, Meta};
         expectations_handlers::create_expectation,
         // Contributors (public)
         contributors_handlers::register_contributor,
+        // Categories (public)
+        categories_handlers::list_categories,
+        categories_handlers::get_category,
+        // Tickets (protected)
+        tickets_handlers::list_tickets,
+        tickets_handlers::get_ticket,
+        tickets_handlers::get_ticket_by_reference,
         // Citizen Report Agent
         citizen_agent_handlers::chat_handler::chat_stream,
         citizen_agent_handlers::chat_handler::chat_sync,
@@ -102,6 +113,16 @@ use crate::shared::types::{ApiResponse, Meta};
             contributors_dtos::CreateContributorDto,
             contributors_dtos::ContributorResponseDto,
             ApiResponse<contributors_dtos::ContributorResponseDto>,
+            // Categories
+            categories_dtos::CategoryResponseDto,
+            categories_dtos::CategoryTreeDto,
+            ApiResponse<Vec<categories_dtos::CategoryResponseDto>>,
+            ApiResponse<categories_dtos::CategoryResponseDto>,
+            // Tickets
+            tickets_models::TicketStatus,
+            tickets_dtos::TicketResponseDto,
+            ApiResponse<Vec<tickets_dtos::TicketResponseDto>>,
+            ApiResponse<tickets_dtos::TicketResponseDto>,
             // Citizen Report Agent
             citizen_agent_dtos::ChatRequestDto,
             citizen_agent_dtos::ChatResponseDto,
@@ -122,6 +143,8 @@ use crate::shared::types::{ApiResponse, Meta};
         (name = "expectations", description = "User expectations from landing page (public)"),
         (name = "contributors", description = "Contributor registration (public)"),
         (name = "citizen-report-agent", description = "AI-powered citizen report assistant"),
+        (name = "categories", description = "Report categories (public)"),
+        (name = "tickets", description = "Citizen report tickets"),
     ),
     modifiers(&SecurityAddon),
     info(

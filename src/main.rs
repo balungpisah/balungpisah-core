@@ -10,14 +10,16 @@ use crate::features::auth;
 use crate::features::auth::clients::LogtoAuthClient;
 use crate::features::auth::routes as auth_routes;
 use crate::features::auth::services::{AuthService, TokenService};
+use crate::features::categories::{routes as categories_routes, CategoryService};
 use crate::features::citizen_report_agent::{
-    routes as citizen_agent_routes, AgentRuntimeService, ConversationService,
+    create_tool_registry, routes as citizen_agent_routes, AgentRuntimeService, ConversationService,
 };
 use crate::features::contributors::{routes as contributors_routes, ContributorService};
 use crate::features::expectations::{routes as expectations_routes, ExpectationService};
 use crate::features::files::{routes as files_routes, FileService};
 use crate::features::logto::token_manager::LogtoTokenManager;
 use crate::features::regions::{routes as regions_routes, RegionService};
+use crate::features::tickets::{routes as tickets_routes, TicketService};
 use crate::features::users::{
     clients::logto::LogtoUserProfileClient, routes as users_routes, services::UserProfileService,
 };
@@ -156,6 +158,14 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let contributor_service = Arc::new(ContributorService::new(pool.clone()));
     tracing::info!("Contributor service initialized");
 
+    // Initialize Category Service
+    let category_service = Arc::new(CategoryService::new(pool.clone()));
+    tracing::info!("Category service initialized");
+
+    // Initialize Ticket Service
+    let ticket_service = Arc::new(TicketService::new(pool.clone()));
+    tracing::info!("Ticket service initialized");
+
     // Initialize Citizen Report Agent Services
     // ADK uses a separate database for conversation storage
     let tensorzero_client =
@@ -185,11 +195,19 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("ADK migration failed: {}", e))?;
     tracing::info!("ADK database migrations completed successfully");
 
-    let agent_runtime_service = Arc::new(AgentRuntimeService::new(
+    // Create tool registry with database pool for ticket creation
+    let tool_registry = create_tool_registry(Arc::new(pool.clone()));
+    tracing::info!(
+        "Agent tool registry initialized with {} tools",
+        tool_registry.names().len()
+    );
+
+    let agent_runtime_service = Arc::new(AgentRuntimeService::with_tools(
         tensorzero_client,
         Arc::clone(&adk_storage),
         config.agent_gateway.openai_api_key.clone(),
         config.agent_gateway.model_name.clone(),
+        tool_registry,
     ));
     let conversation_service = Arc::new(ConversationService::new(Arc::clone(&adk_storage)));
     tracing::info!(
@@ -226,6 +244,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(users_routes::routes(user_profile_service))
         .merge(regions_routes::routes(region_service))
         .merge(files_routes::routes(file_service))
+        .merge(tickets_routes::routes(Arc::clone(&ticket_service)))
         .merge(citizen_agent_routes::routes(
             Arc::clone(&agent_runtime_service),
             Arc::clone(&conversation_service),
@@ -245,7 +264,8 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let public_routes = Router::new()
         .merge(auth_routes::public_routes(auth_service))
         .merge(expectations_routes::routes(expectation_service))
-        .merge(contributors_routes::routes(contributor_service));
+        .merge(contributors_routes::routes(contributor_service))
+        .merge(categories_routes::routes(category_service));
 
     let app = Router::new()
         .merge(swagger)
