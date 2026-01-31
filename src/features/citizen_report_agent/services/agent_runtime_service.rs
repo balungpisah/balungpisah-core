@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use balungpisah_adk::{
     Agent, AgentBuilder, ChatRequest, MessageContent, PostgresStorage, Storage, TensorZeroClient,
+    ToolRegistry,
 };
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -9,9 +10,42 @@ use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
 
-/// Basic system prompt for the citizen report agent
-const SYSTEM_PROMPT: &str =
-    "You are a helpful assistant. Be concise but friendly in your responses.";
+/// System prompt for the citizen report agent
+const SYSTEM_PROMPT: &str = r#"Anda adalah asisten BalungPisah yang membantu warga melaporkan masalah di lingkungan mereka.
+
+## Tugas Anda
+1. Wawancarai warga untuk mengumpulkan informasi tentang masalah yang mereka hadapi
+2. Pastikan informasi yang dikumpulkan cukup lengkap sebelum membuat tiket
+
+## Informasi yang Perlu Dikumpulkan
+- **Apa masalahnya?** Deskripsi jelas tentang masalah yang terjadi
+- **Di mana?** Lokasi spesifik (nama jalan, kelurahan, landmark terdekat)
+- **Kapan?** Kapan masalah mulai terjadi atau terakhir terjadi
+- **Dampak?** Siapa dan berapa banyak yang terkena dampak (opsional tapi berguna)
+
+## Panduan Percakapan
+- Gunakan bahasa Indonesia yang sopan dan mudah dipahami
+- Tunjukkan empati terhadap masalah warga
+- Ajukan pertanyaan satu per satu, jangan membombardir
+- Jika informasi kurang jelas, minta klarifikasi dengan sopan
+- Rangkum informasi yang sudah dikumpulkan secara berkala
+
+## Kapan Membuat Tiket
+Gunakan tool `create_ticket` HANYA ketika:
+- Warga sudah menjelaskan masalahnya dengan jelas
+- Lokasi sudah cukup spesifik untuk ditindaklanjuti
+- Waktu kejadian sudah diketahui (minimal perkiraan)
+
+Jangan membuat tiket jika:
+- Warga masih bingung atau belum jelas masalahnya
+- Lokasi terlalu umum (contoh: "di Jakarta" tanpa detail)
+- Informasi masih sangat minim
+
+## Setelah Membuat Tiket
+Sampaikan nomor referensi kepada warga dan jelaskan bahwa:
+- Laporan akan diproses dan dikategorikan
+- Mereka dapat memantau status laporan dengan nomor referensi tersebut
+- Tanyakan apakah ada hal lain yang ingin dilaporkan"#;
 
 /// Service for managing agent runtime and chat operations
 pub struct AgentRuntimeService {
@@ -19,10 +53,12 @@ pub struct AgentRuntimeService {
     storage: Arc<PostgresStorage>,
     openai_api_key: String,
     model_name: String,
+    tools: ToolRegistry,
 }
 
 impl AgentRuntimeService {
     /// Create a new AgentRuntimeService
+    #[allow(dead_code)]
     pub fn new(
         tensorzero_client: TensorZeroClient,
         storage: Arc<PostgresStorage>,
@@ -34,6 +70,24 @@ impl AgentRuntimeService {
             storage,
             openai_api_key,
             model_name,
+            tools: ToolRegistry::new(),
+        }
+    }
+
+    /// Create a new AgentRuntimeService with tools
+    pub fn with_tools(
+        tensorzero_client: TensorZeroClient,
+        storage: Arc<PostgresStorage>,
+        openai_api_key: String,
+        model_name: String,
+        tools: ToolRegistry,
+    ) -> Self {
+        Self {
+            tensorzero_client,
+            storage,
+            openai_api_key,
+            model_name,
+            tools,
         }
     }
 
@@ -56,7 +110,8 @@ impl AgentRuntimeService {
                 "system_api_key": self.openai_api_key
             }))
             .system_prompt(SYSTEM_PROMPT)
-            .max_iterations(5)
+            .tools(self.tools.clone())
+            .max_iterations(10)
             .build()
             .map_err(|e| AppError::Internal(format!("Failed to build agent: {}", e)))
     }
