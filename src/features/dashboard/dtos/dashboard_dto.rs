@@ -4,58 +4,63 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::features::reports::models::{ReportSeverity, ReportStatus, ReportTagType};
+use crate::shared::constants::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
 // ============================================================================
 // Pagination
 // ============================================================================
 
-/// Pagination query parameters
-#[derive(Debug, Clone, Deserialize, IntoParams)]
-pub struct PaginationParams {
-    /// Page number (1-indexed)
-    #[serde(default = "default_page")]
+/// Pagination metadata for response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PaginationMeta {
     pub page: i64,
-    /// Items per page
-    #[serde(default = "default_per_page")]
-    pub per_page: i64,
+    pub page_size: i64,
+    pub total_items: i64,
+    pub total_pages: i64,
+}
+
+impl PaginationMeta {
+    pub fn new(page: i64, page_size: i64, total_items: i64) -> Self {
+        let clamped_page_size = page_size.clamp(1, MAX_PAGE_SIZE);
+        let total_pages = (total_items as f64 / clamped_page_size as f64).ceil() as i64;
+        Self {
+            page,
+            page_size: clamped_page_size,
+            total_items,
+            total_pages,
+        }
+    }
 }
 
 fn default_page() -> i64 {
     1
 }
 
-fn default_per_page() -> i64 {
-    20
+fn default_page_size() -> i64 {
+    DEFAULT_PAGE_SIZE
+}
+
+/// Standard pagination query parameters
+#[derive(Debug, Clone, Deserialize, IntoParams)]
+pub struct PaginationParams {
+    /// Page number (1-indexed)
+    #[serde(default = "default_page")]
+    #[param(minimum = 1)]
+    pub page: i64,
+
+    /// Number of items per page
+    #[serde(default = "default_page_size")]
+    #[param(minimum = 1, maximum = 100)]
+    pub page_size: i64,
 }
 
 impl PaginationParams {
     pub fn offset(&self) -> i64 {
-        (self.page.max(1) - 1) * self.per_page.clamp(1, 100)
+        (self.page.max(1) - 1) * self.limit()
     }
 
     pub fn limit(&self) -> i64 {
-        self.per_page.clamp(1, 100)
-    }
-}
-
-/// Pagination metadata
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct PaginationMeta {
-    pub page: i64,
-    pub per_page: i64,
-    pub total_items: i64,
-    pub total_pages: i64,
-}
-
-impl PaginationMeta {
-    pub fn new(page: i64, per_page: i64, total_items: i64) -> Self {
-        let total_pages = (total_items as f64 / per_page as f64).ceil() as i64;
-        Self {
-            page,
-            per_page,
-            total_items,
-            total_pages,
-        }
+        self.page_size.clamp(1, MAX_PAGE_SIZE)
     }
 }
 
@@ -126,17 +131,6 @@ pub struct DashboardReportDetailDto {
 }
 
 // ============================================================================
-// List Reports Response
-// ============================================================================
-
-/// Paginated list of reports
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct DashboardReportsDto {
-    pub reports: Vec<DashboardReportDto>,
-    pub pagination: PaginationMeta,
-}
-
-// ============================================================================
 // By Location
 // ============================================================================
 
@@ -147,12 +141,24 @@ pub struct LocationQueryParams {
     pub province_id: Option<Uuid>,
     /// Filter by regency ID
     pub regency_id: Option<Uuid>,
-    /// Page number
+    /// Page number (1-indexed)
     #[serde(default = "default_page")]
+    #[param(minimum = 1)]
     pub page: i64,
-    /// Items per page
-    #[serde(default = "default_per_page")]
-    pub per_page: i64,
+    /// Number of items per page
+    #[serde(default = "default_page_size")]
+    #[param(minimum = 1, maximum = 100)]
+    pub page_size: i64,
+}
+
+impl LocationQueryParams {
+    pub fn offset(&self) -> i64 {
+        (self.page.max(1) - 1) * self.limit()
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size.clamp(1, MAX_PAGE_SIZE)
+    }
 }
 
 /// Province with report count
@@ -198,12 +204,24 @@ pub struct DashboardLocationOverviewDto {
 pub struct CategoryQueryParams {
     /// Category slug to filter by
     pub slug: Option<String>,
-    /// Page number
+    /// Page number (1-indexed)
     #[serde(default = "default_page")]
+    #[param(minimum = 1)]
     pub page: i64,
-    /// Items per page
-    #[serde(default = "default_per_page")]
-    pub per_page: i64,
+    /// Number of items per page
+    #[serde(default = "default_page_size")]
+    #[param(minimum = 1, maximum = 100)]
+    pub page_size: i64,
+}
+
+impl CategoryQueryParams {
+    pub fn offset(&self) -> i64 {
+        (self.page.max(1) - 1) * self.limit()
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size.clamp(1, MAX_PAGE_SIZE)
+    }
 }
 
 /// Category with report count
@@ -236,12 +254,24 @@ pub struct DashboardCategoryOverviewDto {
 pub struct TagQueryParams {
     /// Tag type to filter by
     pub tag_type: Option<ReportTagType>,
-    /// Page number
+    /// Page number (1-indexed)
     #[serde(default = "default_page")]
+    #[param(minimum = 1)]
     pub page: i64,
-    /// Items per page
-    #[serde(default = "default_per_page")]
-    pub per_page: i64,
+    /// Number of items per page
+    #[serde(default = "default_page_size")]
+    #[param(minimum = 1, maximum = 100)]
+    pub page_size: i64,
+}
+
+impl TagQueryParams {
+    pub fn offset(&self) -> i64 {
+        (self.page.max(1) - 1) * self.limit()
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size.clamp(1, MAX_PAGE_SIZE)
+    }
 }
 
 /// Tag type with report count

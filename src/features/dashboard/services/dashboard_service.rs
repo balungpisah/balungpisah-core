@@ -54,7 +54,11 @@ impl DashboardService {
     // ========================================================================
 
     /// List all reports with pagination
-    pub async fn list_reports(&self, params: &PaginationParams) -> Result<DashboardReportsDto> {
+    /// Returns (reports, total_count)
+    pub async fn list_reports(
+        &self,
+        params: &PaginationParams,
+    ) -> Result<(Vec<DashboardReportDto>, i64)> {
         let offset = params.offset();
         let limit = params.limit();
 
@@ -115,10 +119,7 @@ impl DashboardService {
             });
         }
 
-        Ok(DashboardReportsDto {
-            reports,
-            pagination: PaginationMeta::new(params.page, params.per_page, total),
-        })
+        Ok((reports, total))
     }
 
     /// Get single report detail
@@ -195,8 +196,8 @@ impl DashboardService {
 
         // If regency_id provided, get actual reports
         let (reports, pagination) = if let Some(regency_id) = params.regency_id {
-            let offset = (params.page.max(1) - 1) * params.per_page.clamp(1, 100);
-            let limit = params.per_page.clamp(1, 100);
+            let offset = params.offset();
+            let limit = params.limit();
 
             let total = sqlx::query_scalar!(
                 r#"
@@ -218,7 +219,7 @@ impl DashboardService {
             let reports = self
                 .get_reports_by_regency(regency_id, offset, limit)
                 .await?;
-            let pagination = PaginationMeta::new(params.page, params.per_page, total);
+            let pagination = PaginationMeta::new(params.page, params.page_size, total);
             (Some(reports), Some(pagination))
         } else {
             (None, None)
@@ -383,8 +384,8 @@ impl DashboardService {
 
         // If slug provided, get reports for that category
         let (reports, pagination) = if let Some(slug) = &params.slug {
-            let offset = (params.page.max(1) - 1) * params.per_page.clamp(1, 100);
-            let limit = params.per_page.clamp(1, 100);
+            let offset = params.offset();
+            let limit = params.limit();
 
             let total = sqlx::query_scalar!(
                 r#"
@@ -405,7 +406,7 @@ impl DashboardService {
             })?;
 
             let reports = self.get_reports_by_category(slug, offset, limit).await?;
-            let pagination = PaginationMeta::new(params.page, params.per_page, total);
+            let pagination = PaginationMeta::new(params.page, params.page_size, total);
             (Some(reports), Some(pagination))
         } else {
             (None, None)
@@ -527,8 +528,8 @@ impl DashboardService {
 
         // If tag_type provided, get reports
         let (reports, pagination) = if let Some(tag_type) = &params.tag_type {
-            let offset = (params.page.max(1) - 1) * params.per_page.clamp(1, 100);
-            let limit = params.per_page.clamp(1, 100);
+            let offset = params.offset();
+            let limit = params.limit();
 
             let total = sqlx::query_scalar!(
                 r#"
@@ -548,7 +549,7 @@ impl DashboardService {
             })?;
 
             let reports = self.get_reports_by_tag(tag_type, offset, limit).await?;
-            let pagination = PaginationMeta::new(params.page, params.per_page, total);
+            let pagination = PaginationMeta::new(params.page, params.page_size, total);
             (Some(reports), Some(pagination))
         } else {
             (None, None)

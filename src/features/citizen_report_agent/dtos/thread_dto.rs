@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+use crate::shared::constants::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
+
 /// Response DTO for a conversation thread
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ThreadResponseDto {
@@ -60,46 +62,64 @@ pub struct MessageResponseDto {
     pub created_at: DateTime<Utc>,
 }
 
+fn default_page() -> i64 {
+    1
+}
+
+fn default_page_size() -> i64 {
+    DEFAULT_PAGE_SIZE
+}
+
 /// Query parameters for listing threads
 #[derive(Debug, Clone, Deserialize, IntoParams)]
 pub struct ListThreadsQuery {
-    /// Maximum number of threads to return (default: 20, max: 100)
-    #[param(minimum = 1, maximum = 100)]
-    pub limit: Option<i64>,
+    /// Page number (1-indexed)
+    #[serde(default = "default_page")]
+    #[param(minimum = 1)]
+    pub page: i64,
 
-    /// Number of threads to skip (default: 0)
-    #[param(minimum = 0)]
-    pub offset: Option<i64>,
+    /// Number of items per page (default: 10, max: 100)
+    #[serde(default = "default_page_size")]
+    #[param(minimum = 1, maximum = 100)]
+    pub page_size: i64,
 }
 
 impl ListThreadsQuery {
     pub fn limit(&self) -> i64 {
-        self.limit.unwrap_or(20).clamp(1, 100)
+        self.page_size.clamp(1, MAX_PAGE_SIZE)
     }
 
     pub fn offset(&self) -> i64 {
-        self.offset.unwrap_or(0).max(0)
+        (self.page.max(1) - 1) * self.limit()
     }
 }
+
+fn default_messages_page_size() -> i64 {
+    50
+}
+
+const MAX_MESSAGES_PAGE_SIZE: i64 = 200;
 
 /// Query parameters for listing messages
 #[derive(Debug, Clone, Deserialize, IntoParams)]
 pub struct ListMessagesQuery {
-    /// Maximum number of messages to return (default: 50, max: 200)
-    #[param(minimum = 1, maximum = 200)]
-    pub limit: Option<i64>,
+    /// Page number (1-indexed)
+    #[serde(default = "default_page")]
+    #[param(minimum = 1)]
+    pub page: i64,
 
-    /// Number of messages to skip (default: 0)
-    #[param(minimum = 0)]
-    pub offset: Option<i64>,
+    /// Number of items per page (default: 50, max: 200)
+    #[serde(default = "default_messages_page_size")]
+    #[param(minimum = 1, maximum = 200)]
+    pub page_size: i64,
 }
 
 impl ListMessagesQuery {
     pub fn limit(&self) -> i64 {
-        self.limit.unwrap_or(50).clamp(1, 200)
+        self.page_size.clamp(1, MAX_MESSAGES_PAGE_SIZE)
     }
 
     pub fn offset(&self) -> i64 {
-        self.offset.unwrap_or(0).max(0)
+        (self.page.max(1) - 1) * self.limit()
     }
 }

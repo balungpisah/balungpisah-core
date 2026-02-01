@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::core::error::AppError;
 use crate::features::dashboard::dtos::*;
 use crate::features::dashboard::services::DashboardService;
-use crate::shared::types::ApiResponse;
+use crate::shared::types::{ApiResponse, Meta};
 
 // ============================================================================
 // Summary
@@ -42,16 +42,20 @@ pub async fn get_summary(
     tag = "Dashboard",
     params(PaginationParams),
     responses(
-        (status = 200, description = "Paginated reports list", body = ApiResponse<DashboardReportsDto>),
+        (status = 200, description = "Paginated reports list", body = ApiResponse<Vec<DashboardReportDto>>),
         (status = 500, description = "Internal server error")
     )
 )]
 pub async fn list_reports(
     State(service): State<Arc<DashboardService>>,
     Query(params): Query<PaginationParams>,
-) -> Result<Json<ApiResponse<DashboardReportsDto>>, AppError> {
-    let data = service.list_reports(&params).await?;
-    Ok(Json(ApiResponse::success(Some(data), None, None)))
+) -> Result<Json<ApiResponse<Vec<DashboardReportDto>>>, AppError> {
+    let (reports, total) = service.list_reports(&params).await?;
+    Ok(Json(ApiResponse::success(
+        Some(reports),
+        None,
+        Some(Meta { total }),
+    )))
 }
 
 /// Get single report detail
