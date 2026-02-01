@@ -2,6 +2,7 @@ pub mod auth;
 pub mod categories;
 pub mod citizen_report_agent;
 pub mod contributors;
+pub mod dashboard;
 pub mod expectations;
 pub mod files;
 pub mod logto;

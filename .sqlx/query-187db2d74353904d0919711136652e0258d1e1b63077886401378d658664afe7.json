@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT\n                r.id,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.created_at\n            FROM reports r\n            JOIN report_categories rc ON rc.report_id = r.id\n            JOIN categories c ON c.id = rc.category_id\n            WHERE c.slug = $1\n              AND r.status NOT IN ('draft', 'rejected')\n            ORDER BY r.created_at DESC\n            OFFSET $2 LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "status: ReportStatus",
+        "type_info": {
+          "Custom": {
+            "name": "report_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "pending",
+                "verified",
+                "in_progress",
+                "resolved",
+                "rejected"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "timeline",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "impact",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "187db2d74353904d0919711136652e0258d1e1b63077886401378d658664afe7"
+}

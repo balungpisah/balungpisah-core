@@ -7,9 +7,13 @@ use crate::features::citizen_report_agent::{
     dtos as citizen_agent_dtos, handlers as citizen_agent_handlers,
 };
 use crate::features::contributors::{dtos as contributors_dtos, handlers as contributors_handlers};
+use crate::features::dashboard::{dtos as dashboard_dtos, handlers as dashboard_handlers};
 use crate::features::expectations::{dtos as expectations_dtos, handlers as expectations_handlers};
 use crate::features::files::{dtos as files_dtos, handlers as files_handlers};
 use crate::features::regions::{dtos as regions_dtos, handlers as regions_handlers};
+use crate::features::reports::{
+    dtos as reports_dtos, handlers as reports_handlers, models as reports_models,
+};
 use crate::features::tickets::{
     dtos as tickets_dtos, handlers as tickets_handlers, models as tickets_models,
 };
@@ -60,6 +64,21 @@ use crate::shared::types::{ApiResponse, Meta};
         citizen_agent_handlers::conversation_handler::list_threads,
         citizen_agent_handlers::conversation_handler::get_thread,
         citizen_agent_handlers::conversation_handler::list_messages,
+        // Reports
+        reports_handlers::report_handler::list_reports,
+        reports_handlers::report_handler::get_report,
+        reports_handlers::report_handler::update_report_status,
+        reports_handlers::report_handler::list_clusters,
+        reports_handlers::report_handler::get_cluster,
+        // Dashboard (public)
+        dashboard_handlers::dashboard_handler::get_summary,
+        dashboard_handlers::dashboard_handler::list_reports,
+        dashboard_handlers::dashboard_handler::get_report,
+        dashboard_handlers::dashboard_handler::get_by_location,
+        dashboard_handlers::dashboard_handler::get_by_category,
+        dashboard_handlers::dashboard_handler::get_by_tag,
+        dashboard_handlers::dashboard_handler::get_recent,
+        dashboard_handlers::dashboard_handler::get_map,
     ),
     components(
         schemas(
@@ -133,6 +152,51 @@ use crate::shared::types::{ApiResponse, Meta};
             ApiResponse<Vec<citizen_agent_dtos::ThreadResponseDto>>,
             ApiResponse<citizen_agent_dtos::ThreadDetailDto>,
             ApiResponse<Vec<citizen_agent_dtos::MessageResponseDto>>,
+            // Reports
+            reports_models::ReportStatus,
+            reports_models::ReportSeverity,
+            reports_models::ReportTagType,
+            reports_models::ClusterStatus,
+            reports_models::GeocodingSource,
+            reports_dtos::ReportCategoryDto,
+            reports_dtos::ReportTagDto,
+            reports_dtos::ReportResponseDto,
+            reports_dtos::ReportDetailResponseDto,
+            reports_dtos::ReportLocationResponseDto,
+            reports_dtos::ReportClusterResponseDto,
+            reports_dtos::ClusterDetailResponseDto,
+            reports_dtos::UpdateReportStatusDto,
+            ApiResponse<Vec<reports_dtos::ReportResponseDto>>,
+            ApiResponse<reports_dtos::ReportDetailResponseDto>,
+            ApiResponse<reports_dtos::ReportResponseDto>,
+            ApiResponse<Vec<reports_dtos::ReportClusterResponseDto>>,
+            ApiResponse<reports_dtos::ClusterDetailResponseDto>,
+            // Dashboard (public)
+            dashboard_dtos::PaginationMeta,
+            dashboard_dtos::ReportCategoryInfo,
+            dashboard_dtos::ReportLocationInfo,
+            dashboard_dtos::DashboardReportDto,
+            dashboard_dtos::DashboardReportDetailDto,
+            dashboard_dtos::DashboardReportsDto,
+            dashboard_dtos::ProvinceReportSummary,
+            dashboard_dtos::RegencyReportSummary,
+            dashboard_dtos::DashboardLocationOverviewDto,
+            dashboard_dtos::CategoryReportSummary,
+            dashboard_dtos::DashboardCategoryOverviewDto,
+            dashboard_dtos::TagReportSummary,
+            dashboard_dtos::DashboardTagOverviewDto,
+            dashboard_dtos::DashboardRecentDto,
+            dashboard_dtos::MapReportMarker,
+            dashboard_dtos::DashboardMapDto,
+            dashboard_dtos::DashboardSummaryDto,
+            ApiResponse<dashboard_dtos::DashboardSummaryDto>,
+            ApiResponse<dashboard_dtos::DashboardReportsDto>,
+            ApiResponse<dashboard_dtos::DashboardReportDetailDto>,
+            ApiResponse<dashboard_dtos::DashboardLocationOverviewDto>,
+            ApiResponse<dashboard_dtos::DashboardCategoryOverviewDto>,
+            ApiResponse<dashboard_dtos::DashboardTagOverviewDto>,
+            ApiResponse<dashboard_dtos::DashboardRecentDto>,
+            ApiResponse<dashboard_dtos::DashboardMapDto>,
         )
     ),
     tags(
@@ -145,6 +209,8 @@ use crate::shared::types::{ApiResponse, Meta};
         (name = "citizen-report-agent", description = "AI-powered citizen report assistant"),
         (name = "categories", description = "Report categories (public)"),
         (name = "tickets", description = "Citizen report tickets"),
+        (name = "reports", description = "Citizen reports and clusters"),
+        (name = "Dashboard", description = "Public dashboard for viewing reports"),
     ),
     modifiers(&SecurityAddon),
     info(

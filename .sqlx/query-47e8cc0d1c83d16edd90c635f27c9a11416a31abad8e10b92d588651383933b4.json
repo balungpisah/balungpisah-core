@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                r.id,\n                r.title,\n                r.status as \"status: ReportStatus\",\n                r.created_at,\n                rl.lat as \"lat!\",\n                rl.lon as \"lon!\",\n                c.slug as \"category_slug?\",\n                c.color as \"category_color?\"\n            FROM reports r\n            JOIN report_locations rl ON rl.report_id = r.id\n            LEFT JOIN report_categories rc ON rc.report_id = r.id\n            LEFT JOIN categories c ON c.id = rc.category_id\n            WHERE rl.lat IS NOT NULL\n              AND rl.lon IS NOT NULL\n              AND r.status NOT IN ('draft', 'rejected')\n              AND ($1::uuid IS NULL OR rl.province_id = $1)\n              AND ($2::uuid IS NULL OR rl.regency_id = $2)\n              AND ($3::text IS NULL OR c.slug = $3)\n              AND ($4::report_status IS NULL OR r.status = $4)\n            ORDER BY r.created_at DESC\n            LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "status: ReportStatus",
+        "type_info": {
+          "Custom": {
+            "name": "report_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "pending",
+                "verified",
+                "in_progress",
+                "resolved",
+                "rejected"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "lat!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "lon!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "category_slug?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "category_color?",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "report_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "pending",
+                "verified",
+                "in_progress",
+                "resolved",
+                "rejected"
+              ]
+            }
+          }
+        },
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "47e8cc0d1c83d16edd90c635f27c9a11416a31abad8e10b92d588651383933b4"
+}

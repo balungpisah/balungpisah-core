@@ -1,6 +1,6 @@
 mod report_dto;
 
 pub use report_dto::{
-    ClusterDetailResponseDto, ReportClusterResponseDto, ReportDetailResponseDto,
-    ReportLocationResponseDto, ReportResponseDto, UpdateReportStatusDto,
+    ClusterDetailResponseDto, ReportCategoryDto, ReportClusterResponseDto, ReportDetailResponseDto,
+    ReportLocationResponseDto, ReportResponseDto, ReportTagDto, UpdateReportStatusDto,
 };

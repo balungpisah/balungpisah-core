@@ -15,6 +15,7 @@ use crate::features::citizen_report_agent::{
     create_tool_registry, routes as citizen_agent_routes, AgentRuntimeService, ConversationService,
 };
 use crate::features::contributors::{routes as contributors_routes, ContributorService};
+use crate::features::dashboard::{routes as dashboard_routes, DashboardService};
 use crate::features::expectations::{routes as expectations_routes, ExpectationService};
 use crate::features::files::{routes as files_routes, FileService};
 use crate::features::logto::token_manager::LogtoTokenManager;
@@ -179,6 +180,10 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let region_lookup_service = Arc::new(RegionLookupService::new(pool.clone()));
     tracing::info!("Report services initialized");
 
+    // Initialize Dashboard Service
+    let dashboard_service = Arc::new(DashboardService::new(pool.clone()));
+    tracing::info!("Dashboard service initialized");
+
     // Initialize Citizen Report Agent Services
     // ADK uses a separate database for conversation storage
     let tensorzero_client =
@@ -319,7 +324,8 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(auth_routes::public_routes(auth_service))
         .merge(expectations_routes::routes(expectation_service))
         .merge(contributors_routes::routes(contributor_service))
-        .merge(categories_routes::routes(category_service));
+        .merge(categories_routes::routes(category_service))
+        .merge(dashboard_routes::routes(Arc::clone(&dashboard_service)));
 
     let app = Router::new()
         .merge(swagger)
