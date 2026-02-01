@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO reports (ticket_id, title, description, category_id, severity, timeline, impact)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            RETURNING\n                id, ticket_id, cluster_id, title, description, category_id,\n                severity as \"severity: ReportSeverity\",\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO reports (ticket_id, title, description, timeline, impact)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -30,38 +30,16 @@
       },
       {
         "ordinal": 5,
-        "name": "category_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 6,
-        "name": "severity: ReportSeverity",
-        "type_info": {
-          "Custom": {
-            "name": "report_severity",
-            "kind": {
-              "Enum": [
-                "low",
-                "medium",
-                "high",
-                "critical"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "ordinal": 7,
         "name": "timeline",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "impact",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "status: ReportStatus",
         "type_info": {
           "Custom": {
@@ -80,37 +58,37 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 8,
         "name": "verified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 9,
         "name": "verified_by",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 12,
+        "ordinal": 10,
         "name": "resolved_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 11,
         "name": "resolved_by",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 14,
+        "ordinal": 12,
         "name": "resolution_notes",
         "type_info": "Text"
       },
       {
-        "ordinal": 15,
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 14,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -120,20 +98,6 @@
         "Uuid",
         "Varchar",
         "Text",
-        "Uuid",
-        {
-          "Custom": {
-            "name": "report_severity",
-            "kind": {
-              "Enum": [
-                "low",
-                "medium",
-                "high",
-                "critical"
-              ]
-            }
-          }
-        },
         "Text",
         "Text"
       ]
@@ -146,8 +110,6 @@
       false,
       true,
       true,
-      true,
-      true,
       false,
       true,
       true,
@@ -158,5 +120,5 @@
       false
     ]
   },
-  "hash": "7a986a404f47b886629544468ba1c6445856a558ec28d8ba7316a9f27fec32bc"
+  "hash": "a761555db1ce3767839a9844246b94aca8310e4a96a29a91b43ef877564c8afa"
 }

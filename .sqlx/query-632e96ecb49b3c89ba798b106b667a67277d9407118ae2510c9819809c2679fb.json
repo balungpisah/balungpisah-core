@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id\n            FROM provinces\n            WHERE name ILIKE $1\n               OR name ILIKE $2\n               OR name ILIKE '%' || $1 || '%'\n            ORDER BY\n                CASE\n                    WHEN name ILIKE $1 THEN 1\n                    WHEN name ILIKE $2 THEN 2\n                    ELSE 3\n                END\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "632e96ecb49b3c89ba798b106b667a67277d9407118ae2510c9819809c2679fb"
+}

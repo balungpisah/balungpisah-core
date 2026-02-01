@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, ticket_id, cluster_id, title, description, category_id,\n                severity as \"severity: ReportSeverity\",\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at\n            FROM reports\n            WHERE ticket_id = $1\n            ",
+  "query": "\n            UPDATE reports\n            SET\n                status = $2,\n                resolution_notes = COALESCE($3, resolution_notes),\n                verified_at = COALESCE($4, verified_at),\n                verified_by = COALESCE($5, verified_by),\n                resolved_at = COALESCE($6, resolved_at),\n                resolved_by = COALESCE($7, resolved_by),\n                updated_at = NOW()\n            WHERE id = $1\n            RETURNING\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -30,38 +30,16 @@
       },
       {
         "ordinal": 5,
-        "name": "category_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 6,
-        "name": "severity: ReportSeverity",
-        "type_info": {
-          "Custom": {
-            "name": "report_severity",
-            "kind": {
-              "Enum": [
-                "low",
-                "medium",
-                "high",
-                "critical"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "ordinal": 7,
         "name": "timeline",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "impact",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "status: ReportStatus",
         "type_info": {
           "Custom": {
@@ -80,44 +58,64 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 8,
         "name": "verified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 9,
         "name": "verified_by",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 12,
+        "ordinal": 10,
         "name": "resolved_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 11,
         "name": "resolved_by",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 14,
+        "ordinal": 12,
         "name": "resolution_notes",
         "type_info": "Text"
       },
       {
-        "ordinal": 15,
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 14,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        {
+          "Custom": {
+            "name": "report_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "pending",
+                "verified",
+                "in_progress",
+                "resolved",
+                "rejected"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Timestamptz",
+        "Varchar",
+        "Timestamptz",
+        "Varchar"
       ]
     },
     "nullable": [
@@ -126,8 +124,6 @@
       true,
       false,
       false,
-      true,
-      true,
       true,
       true,
       false,
@@ -140,5 +136,5 @@
       false
     ]
   },
-  "hash": "4982f05a4ca1dc37d890757298a1b4cec3f1dda5668e4b4a07df734dce5dd01d"
+  "hash": "7b6967fff84f8b49f9a3202db63258cb1ef6fe8bf08ac7ca3823baf72f9fa5f4"
 }

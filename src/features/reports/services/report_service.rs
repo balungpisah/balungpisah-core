@@ -5,8 +5,8 @@ use uuid::Uuid;
 use crate::core::error::{AppError, Result};
 use crate::features::reports::dtos::UpdateReportStatusDto;
 use crate::features::reports::models::{
-    CreateReport, CreateReportLocation, GeocodingSource, Report, ReportLocation, ReportSeverity,
-    ReportStatus,
+    CreateReport, CreateReportCategory, CreateReportLocation, CreateReportTag, GeocodingSource,
+    Report, ReportCategory, ReportLocation, ReportSeverity, ReportStatus, ReportTag, ReportTagType,
 };
 
 /// Service for report operations
@@ -24,11 +24,10 @@ impl ReportService {
         let report = sqlx::query_as!(
             Report,
             r#"
-            INSERT INTO reports (ticket_id, title, description, category_id, severity, timeline, impact)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO reports (ticket_id, title, description, timeline, impact)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING
-                id, ticket_id, cluster_id, title, description, category_id,
-                severity as "severity: ReportSeverity",
+                id, ticket_id, cluster_id, title, description,
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
@@ -37,8 +36,6 @@ impl ReportService {
             data.ticket_id,
             data.title,
             data.description,
-            data.category_id,
-            data.severity as Option<ReportSeverity>,
             data.timeline,
             data.impact
         )
@@ -66,14 +63,16 @@ impl ReportService {
             INSERT INTO report_locations (
                 report_id, raw_input, display_name, lat, lon,
                 osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,
-                bounding_box, geocoding_source, geocoding_score, geocoded_at
+                bounding_box, geocoding_source, geocoding_score, geocoded_at,
+                province_id, regency_id, district_id, village_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), $18, $19, $20, $21)
             RETURNING
                 id, report_id, raw_input, display_name, lat, lon,
                 osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,
                 bounding_box, geocoding_source as "geocoding_source: GeocodingSource",
-                geocoding_score, geocoded_at, created_at
+                geocoding_score, geocoded_at, created_at,
+                province_id, regency_id, district_id, village_id
             "#,
             data.report_id,
             data.raw_input,
@@ -91,7 +90,11 @@ impl ReportService {
             data.country_code,
             data.bounding_box,
             data.geocoding_source as GeocodingSource,
-            data.geocoding_score
+            data.geocoding_score,
+            data.province_id,
+            data.regency_id,
+            data.district_id,
+            data.village_id
         )
         .fetch_one(&self.pool)
         .await
@@ -109,8 +112,7 @@ impl ReportService {
             Report,
             r#"
             SELECT
-                id, ticket_id, cluster_id, title, description, category_id,
-                severity as "severity: ReportSeverity",
+                id, ticket_id, cluster_id, title, description,
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
@@ -136,8 +138,7 @@ impl ReportService {
             Report,
             r#"
             SELECT
-                id, ticket_id, cluster_id, title, description, category_id,
-                severity as "severity: ReportSeverity",
+                id, ticket_id, cluster_id, title, description,
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
@@ -164,7 +165,8 @@ impl ReportService {
                 id, report_id, raw_input, display_name, lat, lon,
                 osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,
                 bounding_box, geocoding_source as "geocoding_source: GeocodingSource",
-                geocoding_score, geocoded_at, created_at
+                geocoding_score, geocoded_at, created_at,
+                province_id, regency_id, district_id, village_id
             FROM report_locations
             WHERE report_id = $1
             "#,
@@ -184,8 +186,7 @@ impl ReportService {
             Report,
             r#"
             SELECT
-                r.id, r.ticket_id, r.cluster_id, r.title, r.description, r.category_id,
-                r.severity as "severity: ReportSeverity",
+                r.id, r.ticket_id, r.cluster_id, r.title, r.description,
                 r.timeline, r.impact,
                 r.status as "status: ReportStatus",
                 r.verified_at, r.verified_by, r.resolved_at, r.resolved_by, r.resolution_notes,
@@ -211,8 +212,7 @@ impl ReportService {
             Report,
             r#"
             SELECT
-                id, ticket_id, cluster_id, title, description, category_id,
-                severity as "severity: ReportSeverity",
+                id, ticket_id, cluster_id, title, description,
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
@@ -282,8 +282,7 @@ impl ReportService {
                 updated_at = NOW()
             WHERE id = $1
             RETURNING
-                id, ticket_id, cluster_id, title, description, category_id,
-                severity as "severity: ReportSeverity",
+                id, ticket_id, cluster_id, title, description,
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
@@ -304,5 +303,229 @@ impl ReportService {
             AppError::Database(e)
         })?
         .ok_or_else(|| AppError::NotFound(format!("Report {} not found", id)))
+    }
+
+    // ===== Category Management =====
+
+    /// Assign a category to a report with severity
+    pub async fn assign_category(&self, data: &CreateReportCategory) -> Result<ReportCategory> {
+        let category = sqlx::query_as!(
+            ReportCategory,
+            r#"
+            INSERT INTO report_categories (report_id, category_id, severity)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (report_id, category_id)
+            DO UPDATE SET severity = $3
+            RETURNING
+                id, report_id, category_id,
+                severity as "severity: ReportSeverity",
+                created_at
+            "#,
+            data.report_id,
+            data.category_id,
+            data.severity as ReportSeverity
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to assign category: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        tracing::debug!(
+            "Assigned category {} to report {} with severity {:?}",
+            data.category_id,
+            data.report_id,
+            data.severity
+        );
+
+        Ok(category)
+    }
+
+    /// Assign multiple categories to a report
+    pub async fn assign_categories(
+        &self,
+        report_id: Uuid,
+        categories: &[CreateReportCategory],
+    ) -> Result<Vec<ReportCategory>> {
+        let mut results = Vec::with_capacity(categories.len());
+
+        for cat in categories {
+            // Ensure report_id matches
+            let data = CreateReportCategory {
+                report_id,
+                category_id: cat.category_id,
+                severity: cat.severity,
+            };
+            let result = self.assign_category(&data).await?;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Get all categories for a report
+    #[allow(dead_code)]
+    pub async fn get_categories(&self, report_id: Uuid) -> Result<Vec<ReportCategory>> {
+        sqlx::query_as!(
+            ReportCategory,
+            r#"
+            SELECT
+                id, report_id, category_id,
+                severity as "severity: ReportSeverity",
+                created_at
+            FROM report_categories
+            WHERE report_id = $1
+            ORDER BY created_at ASC
+            "#,
+            report_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get report categories: {:?}", e);
+            AppError::Database(e)
+        })
+    }
+
+    // ===== Tag Management =====
+
+    /// Add a tag to a report
+    pub async fn add_tag(&self, data: &CreateReportTag) -> Result<ReportTag> {
+        let tag = sqlx::query_as!(
+            ReportTag,
+            r#"
+            INSERT INTO report_tags (report_id, tag_type)
+            VALUES ($1, $2)
+            ON CONFLICT (report_id, tag_type) DO NOTHING
+            RETURNING
+                id, report_id,
+                tag_type as "tag_type: ReportTagType",
+                created_at
+            "#,
+            data.report_id,
+            data.tag_type as ReportTagType
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to add tag: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        // If conflict occurred, fetch the existing tag
+        match tag {
+            Some(t) => Ok(t),
+            None => sqlx::query_as!(
+                ReportTag,
+                r#"
+                    SELECT
+                        id, report_id,
+                        tag_type as "tag_type: ReportTagType",
+                        created_at
+                    FROM report_tags
+                    WHERE report_id = $1 AND tag_type = $2
+                    "#,
+                data.report_id,
+                data.tag_type as ReportTagType
+            )
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch existing tag: {:?}", e);
+                AppError::Database(e)
+            }),
+        }
+    }
+
+    /// Add multiple tags to a report
+    pub async fn add_tags(
+        &self,
+        report_id: Uuid,
+        tag_types: &[ReportTagType],
+    ) -> Result<Vec<ReportTag>> {
+        let mut results = Vec::with_capacity(tag_types.len());
+
+        for tag_type in tag_types {
+            let data = CreateReportTag {
+                report_id,
+                tag_type: *tag_type,
+            };
+            let result = self.add_tag(&data).await?;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Get all tags for a report
+    #[allow(dead_code)]
+    pub async fn get_tags(&self, report_id: Uuid) -> Result<Vec<ReportTag>> {
+        sqlx::query_as!(
+            ReportTag,
+            r#"
+            SELECT
+                id, report_id,
+                tag_type as "tag_type: ReportTagType",
+                created_at
+            FROM report_tags
+            WHERE report_id = $1
+            ORDER BY created_at ASC
+            "#,
+            report_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get report tags: {:?}", e);
+            AppError::Database(e)
+        })
+    }
+
+    // ===== Location Region Management =====
+
+    /// Update region FKs for a report location
+    #[allow(dead_code)]
+    pub async fn update_location_regions(
+        &self,
+        location_id: Uuid,
+        province_id: Option<Uuid>,
+        regency_id: Option<Uuid>,
+        district_id: Option<Uuid>,
+        village_id: Option<Uuid>,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE report_locations
+            SET
+                province_id = COALESCE($2, province_id),
+                regency_id = COALESCE($3, regency_id),
+                district_id = COALESCE($4, district_id),
+                village_id = COALESCE($5, village_id)
+            WHERE id = $1
+            "#,
+            location_id,
+            province_id,
+            regency_id,
+            district_id,
+            village_id
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update location regions: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        tracing::debug!(
+            "Updated location {} regions: province={:?}, regency={:?}, district={:?}, village={:?}",
+            location_id,
+            province_id,
+            regency_id,
+            district_id,
+            village_id
+        );
+
+        Ok(())
     }
 }

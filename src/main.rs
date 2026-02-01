@@ -20,7 +20,8 @@ use crate::features::files::{routes as files_routes, FileService};
 use crate::features::logto::token_manager::LogtoTokenManager;
 use crate::features::regions::{routes as regions_routes, RegionService};
 use crate::features::reports::{
-    routes as reports_routes, ClusteringService, GeocodingService, ReportService,
+    routes as reports_routes, ClusteringService, GeocodingService, RegionLookupService,
+    ReportService,
 };
 use crate::features::tickets::{
     routes as tickets_routes, ExtractionService, TicketProcessor, TicketService,
@@ -175,6 +176,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let report_service = Arc::new(ReportService::new(pool.clone()));
     let geocoding_service = Arc::new(GeocodingService::new());
     let clustering_service = Arc::new(ClusteringService::new(pool.clone()));
+    let region_lookup_service = Arc::new(RegionLookupService::new(pool.clone()));
     tracing::info!("Report services initialized");
 
     // Initialize Citizen Report Agent Services
@@ -208,6 +210,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
 
     // Initialize Extraction Service (uses TensorZero + ADK for LLM calls)
     let extraction_service = match ExtractionService::new(
+        pool.clone(),
         &config.agent_gateway.tensorzero_url,
         config.agent_gateway.openai_api_key.clone(),
         config.agent_gateway.model_name.clone(),
@@ -234,6 +237,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
             Arc::clone(&geocoding_service),
             Arc::clone(&clustering_service),
             Arc::clone(&report_service),
+            Arc::clone(&region_lookup_service),
         );
         tokio::spawn(async move {
             processor.run().await;

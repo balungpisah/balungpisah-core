@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT r.id, r.province_id\n                FROM regencies r\n                WHERE r.province_id = $3\n                  AND (r.name ILIKE $1\n                       OR r.name ILIKE $2\n                       OR r.name ILIKE '%' || $1 || '%')\n                ORDER BY\n                    CASE\n                        WHEN r.name ILIKE $1 THEN 1\n                        WHEN r.name ILIKE $2 THEN 2\n                        ELSE 3\n                    END\n                LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "province_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ea9ece086514938760337afa11f18e4efe0a5298434560a83240485675d7b1d6"
+}

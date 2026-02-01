@@ -5,8 +5,10 @@ use tokio::time::interval;
 use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
-use crate::features::reports::models::CreateReport;
-use crate::features::reports::services::{ClusteringService, GeocodingService, ReportService};
+use crate::features::reports::models::{CreateReport, CreateReportCategory};
+use crate::features::reports::services::{
+    ClusteringService, GeocodingService, RegionLookupService, ReportService,
+};
 use crate::features::tickets::models::{Ticket, TicketStatus};
 use crate::features::tickets::services::ExtractionService;
 
@@ -26,6 +28,7 @@ pub struct TicketProcessor {
     geocoding_service: Arc<GeocodingService>,
     clustering_service: Arc<ClusteringService>,
     report_service: Arc<ReportService>,
+    region_lookup_service: Arc<RegionLookupService>,
 }
 
 impl TicketProcessor {
@@ -35,6 +38,7 @@ impl TicketProcessor {
         geocoding_service: Arc<GeocodingService>,
         clustering_service: Arc<ClusteringService>,
         report_service: Arc<ReportService>,
+        region_lookup_service: Arc<RegionLookupService>,
     ) -> Self {
         Self {
             pool,
@@ -42,6 +46,7 @@ impl TicketProcessor {
             geocoding_service,
             clustering_service,
             report_service,
+            region_lookup_service,
         }
     }
 
@@ -128,26 +133,55 @@ impl TicketProcessor {
             .extract_from_thread(ticket.adk_thread_id)
             .await?;
 
-        // Look up category by slug
-        let category_id = if let Some(slug) = &extracted.category_slug {
-            self.lookup_category_id(slug).await?
-        } else {
-            None
-        };
-
-        // Create report
+        // Create report (without category_id/severity - those are now in junction table)
         let create_report = CreateReport {
             ticket_id: ticket.id,
             title: extracted.title,
             description: extracted.description,
-            category_id,
-            severity: extracted.severity,
             timeline: extracted.timeline,
             impact: extracted.impact,
         };
 
         let report = self.report_service.create(&create_report).await?;
         tracing::info!("Created report: {} for ticket: {}", report.id, ticket.id);
+
+        // Assign multiple categories with their severities
+        if !extracted.categories.is_empty() {
+            let mut category_assignments = Vec::new();
+
+            for cat in &extracted.categories {
+                if let Some(category_id) = self.lookup_category_id(&cat.slug).await? {
+                    category_assignments.push(CreateReportCategory {
+                        report_id: report.id,
+                        category_id,
+                        severity: cat.severity,
+                    });
+                } else {
+                    tracing::warn!(
+                        "Category slug '{}' not found, skipping for report {}",
+                        cat.slug,
+                        report.id
+                    );
+                }
+            }
+
+            if !category_assignments.is_empty() {
+                self.report_service
+                    .assign_categories(report.id, &category_assignments)
+                    .await?;
+                tracing::info!(
+                    "Assigned {} categories to report {}",
+                    category_assignments.len(),
+                    report.id
+                );
+            }
+        }
+
+        // Add tag if extracted
+        if let Some(tag_type) = extracted.tag_type {
+            self.report_service.add_tags(report.id, &[tag_type]).await?;
+            tracing::info!("Added tag {:?} to report {}", tag_type, report.id);
+        }
 
         // Geocode location if provided
         if extracted.location_raw.is_some()
@@ -183,15 +217,35 @@ impl TicketProcessor {
                 .or_else(|| extracted.location_query.clone())
                 .unwrap_or_default();
 
-            let create_location =
+            // Resolve region FKs before creating location
+            let resolved_regions = self
+                .region_lookup_service
+                .resolve(
+                    extracted.location_city.as_deref(),
+                    extracted.location_state.as_deref(),
+                )
+                .await?;
+
+            let mut create_location =
                 self.geocoding_service
                     .to_create_location(report.id, raw_input, geocode_result);
+
+            // Set region FKs
+            create_location.province_id = resolved_regions.province_id;
+            create_location.regency_id = resolved_regions.regency_id;
+            create_location.district_id = resolved_regions.district_id;
+            create_location.village_id = resolved_regions.village_id;
 
             let location = self
                 .report_service
                 .create_location(&create_location)
                 .await?;
-            tracing::info!("Created report location: {}", location.id);
+            tracing::info!(
+                "Created report location: {} (province: {:?}, regency: {:?})",
+                location.id,
+                resolved_regions.province_id,
+                resolved_regions.regency_id
+            );
 
             // Cluster by location if we have coordinates
             if let (Some(lat), Some(lon)) = (create_location.lat, create_location.lon) {

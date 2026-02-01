@@ -2,15 +2,36 @@ use balungpisah_adk::{MessageStorage, PostgresStorage};
 use balungpisah_tensorzero::{InferenceRequestBuilder, InputMessage, TensorZeroClient};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
-use crate::features::reports::models::ReportSeverity;
+use crate::features::reports::models::{ReportSeverity, ReportTagType};
 use crate::shared::llm::{parse_with_fallback, LlmResponse};
 
 fn default_true() -> bool {
     true
+}
+
+/// Category information for LLM context
+#[derive(Debug, Clone)]
+struct CategoryInfo {
+    name: String,
+    slug: String,
+    description: Option<String>,
+}
+
+/// Extracted category with severity
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub struct ExtractedCategory {
+    #[schemars(
+        description = "Category slug: infrastructure, environment, public-safety, social-welfare, or other"
+    )]
+    pub slug: String,
+
+    #[schemars(description = "Severity level for this category: low, medium, high, or critical")]
+    pub severity: ReportSeverity,
 }
 
 /// Extracted report data from a conversation
@@ -24,12 +45,15 @@ pub struct ExtractedReportData {
     pub description: String,
 
     #[schemars(
-        description = "Category slug: infrastructure, environment, public-safety, social-welfare, or other"
+        description = "List of categories with their severities. A report can belong to multiple categories."
     )]
-    pub category_slug: Option<String>,
+    #[serde(default)]
+    pub categories: Vec<ExtractedCategory>,
 
-    #[schemars(description = "Severity level: low, medium, high, or critical")]
-    pub severity: Option<ReportSeverity>,
+    #[schemars(
+        description = "Type of report: report (observation), proposal (improvement suggestion), complaint (issue complaint), inquiry (question), or appreciation (positive feedback)"
+    )]
+    pub tag_type: Option<ReportTagType>,
 
     #[schemars(description = "When the issue started or occurred")]
     pub timeline: Option<String>,
@@ -93,6 +117,7 @@ impl LlmResponse for ExtractedReportData {
 
 /// Service for extracting structured data from conversations using TensorZero
 pub struct ExtractionService {
+    pool: PgPool,
     client: TensorZeroClient,
     openai_api_key: String,
     model_name: String,
@@ -101,6 +126,7 @@ pub struct ExtractionService {
 
 impl ExtractionService {
     pub fn new(
+        pool: PgPool,
         tensorzero_url: &str,
         openai_api_key: String,
         model_name: String,
@@ -112,11 +138,37 @@ impl ExtractionService {
         })?;
 
         Ok(Self {
+            pool,
             client,
             openai_api_key,
             model_name,
             adk_storage,
         })
+    }
+
+    /// Fetch active categories from the database
+    async fn fetch_active_categories(&self) -> Result<Vec<CategoryInfo>> {
+        let categories = sqlx::query_as!(
+            CategoryInfo,
+            r#"
+            SELECT name, slug, description
+            FROM categories
+            WHERE is_active = true
+            ORDER BY display_order ASC
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch categories: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        tracing::debug!(
+            "Fetched {} active categories for extraction",
+            categories.len()
+        );
+        Ok(categories)
     }
 
     /// Extract structured data from a conversation thread
@@ -173,7 +225,10 @@ impl ExtractionService {
     /// Uses TensorZero inference with JSON schema embedded in system prompt.
     /// Uses graceful fallback parsing - never fails, returns default values on parse errors.
     pub async fn extract_from_text(&self, conversation: &str) -> Result<ExtractedReportData> {
-        let system_prompt = Self::build_system_prompt();
+        // Fetch categories from database for dynamic prompt
+        let categories = self.fetch_active_categories().await?;
+
+        let system_prompt = Self::build_system_prompt(&categories);
         let user_prompt = Self::build_user_prompt(conversation);
 
         // Build inference request with schema in system prompt (avoiding output_schema bug)
@@ -217,50 +272,129 @@ impl ExtractionService {
         Ok(extracted)
     }
 
-    fn build_system_prompt() -> String {
+    fn build_system_prompt(categories: &[CategoryInfo]) -> String {
+        // Build dynamic category list from database
+        let category_list = if categories.is_empty() {
+            // Fallback to default categories if database is empty
+            r#"- `infrastructure` - Roads, bridges, drainage, public facilities, street lights, buildings
+- `environment` - Garbage, pollution, flooding, green spaces, cleanliness, sanitation
+- `public-safety` - Crime, dangerous conditions, accidents, poor lighting, security concerns
+- `social-welfare` - Poverty, health, education, community needs, social issues
+- `other` - Issues that don't fit the above categories"#.to_string()
+        } else {
+            categories
+                .iter()
+                .map(|c| {
+                    let desc = c.description.as_deref().unwrap_or("General category");
+                    format!("- `{}` - {} ({})", c.slug, c.name, desc)
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+
         format!(
             r#"You are a data extraction assistant for a citizen report system in Indonesia. Your task is to extract structured information from conversations between citizens and an AI assistant about issues they want to report.
 
-Extract the following information:
-- title: A concise title for the report (max 200 characters)
-- description: A detailed description of the issue
-- category_slug: One of: infrastructure, environment, public-safety, social-welfare, other
-- severity: One of: low, medium, high, critical
-- timeline: When the issue started or when it occurred
-- impact: Who or how many people are affected
+## Core Information to Extract
 
-## Location Extraction (IMPORTANT)
-Extract location information into structured fields for geocoding:
+### Title and Description
+- **title**: A concise, descriptive title for the report (max 200 characters). Should summarize the main issue.
+- **description**: A detailed description of the issue, including all relevant context mentioned in the conversation.
 
-- location_raw: The original location description exactly as mentioned by the user
-- location_query: A structured query combining street and landmark for geocoding (e.g., "Jalan Tunjungan dekat Tugu Pahlawan, Surabaya"). Include nearby landmarks if mentioned.
-- location_street: Just the street/road name (e.g., "Jalan Pemuda", "Gang Melati", "Jl. Raya Darmo"). Extract from "Jl.", "Jalan", "Gang", "Gg." prefixes.
-- location_city: City or kabupaten name (e.g., "Surabaya", "Sidoarjo", "Malang"). Remove "Kota" or "Kabupaten" prefix if present.
-- location_state: Province name (e.g., "Jawa Timur", "DKI Jakarta"). If not explicitly mentioned, infer from the city if possible (e.g., Surabaya -> Jawa Timur).
+### Categories (Multi-Category Support)
+Reports can belong to multiple categories. Extract as an array of objects with slug and severity.
 
-Examples:
-- Input: "di depan warung Bu Sri, Jalan Tunjungan, Surabaya"
+**Available Category Slugs:**
+{category_list}
+
+**Severity Levels:**
+- `low` - Minor inconvenience, no immediate danger
+- `medium` - Noticeable problem affecting daily life
+- `high` - Serious issue requiring prompt attention
+- `critical` - Emergency or dangerous situation requiring immediate action
+
+**Multi-Category Examples:**
+- Pothole causing accidents: [{{"slug": "infrastructure", "severity": "high"}}, {{"slug": "public-safety", "severity": "medium"}}]
+- Garbage pile attracting pests: [{{"slug": "environment", "severity": "medium"}}, {{"slug": "public-safety", "severity": "low"}}]
+- Broken street light in dark alley: [{{"slug": "infrastructure", "severity": "medium"}}, {{"slug": "public-safety", "severity": "high"}}]
+- Flooding damaging homes: [{{"slug": "environment", "severity": "critical"}}, {{"slug": "infrastructure", "severity": "high"}}]
+
+### Report Type (Tag)
+Classify the intent of the submission:
+- `report` - General observation or reporting of an issue
+- `complaint` - Expression of dissatisfaction about a problem
+- `proposal` - Suggestion for improvement or new initiative
+- `inquiry` - Question or request for information
+- `appreciation` - Positive feedback, thanks, or compliment
+
+### Timeline and Impact
+- **timeline**: When the issue started or occurred (e.g., "2 weeks ago", "since last month", "happened yesterday")
+- **impact**: Who or how many are affected (e.g., "affects all residents in the area", "dangerous for children", "hundreds of people daily")
+
+## Location Extraction (CRITICAL FOR GEOCODING)
+
+Extract location into structured fields for accurate geocoding:
+
+- **location_raw**: The exact, unmodified location description as mentioned by the user
+- **location_query**: A structured query for geocoding combining street name with nearby landmark and city (e.g., "Jalan Tunjungan dekat Tugu Pahlawan, Surabaya")
+- **location_street**: Just the street or road name. Look for prefixes: "Jl.", "Jalan", "Gang", "Gg.", "Lorong"
+- **location_city**: City or regency name. Remove prefixes "Kota" or "Kabupaten" (e.g., "Kota Surabaya" → "Surabaya")
+- **location_state**: Province name. If not explicitly mentioned, infer from the city using this knowledge:
+  - Surabaya, Sidoarjo, Malang, Gresik, Jember → Jawa Timur
+  - Jakarta, Jakarta Selatan, Jakarta Utara → DKI Jakarta
+  - Bandung, Bekasi, Bogor, Depok → Jawa Barat
+  - Semarang, Solo, Yogyakarta → Jawa Tengah
+  - Medan → Sumatera Utara
+  - Makassar → Sulawesi Selatan
+  - Denpasar → Bali
+
+**Location Examples:**
+
+Example 1:
+- User mentions: "di depan warung Bu Sri, Jalan Tunjungan, Surabaya"
+- Extract:
   - location_raw: "di depan warung Bu Sri, Jalan Tunjungan, Surabaya"
   - location_query: "Jalan Tunjungan dekat warung Bu Sri, Surabaya"
   - location_street: "Jalan Tunjungan"
   - location_city: "Surabaya"
   - location_state: "Jawa Timur"
 
-- Input: "Gang Sempit RT 5 RW 3, Kelurahan Wonokromo"
+Example 2:
+- User mentions: "Gang Sempit RT 5 RW 3, Kelurahan Wonokromo"
+- Extract:
   - location_raw: "Gang Sempit RT 5 RW 3, Kelurahan Wonokromo"
-  - location_query: "Gang Sempit, Wonokromo"
+  - location_query: "Gang Sempit, Wonokromo, Surabaya"
   - location_street: "Gang Sempit"
-  - location_city: null (kelurahan is not city-level)
-  - location_state: null
+  - location_city: "Surabaya" (inferred from Wonokromo being in Surabaya)
+  - location_state: "Jawa Timur"
 
-Be accurate and only extract information that is explicitly mentioned in the conversation. If information is not provided or cannot be inferred, set it to null.
+Example 3:
+- User mentions: "dekat Stasiun Gambir, Jakarta Pusat"
+- Extract:
+  - location_raw: "dekat Stasiun Gambir, Jakarta Pusat"
+  - location_query: "Stasiun Gambir, Jakarta Pusat"
+  - location_street: null
+  - location_city: "Jakarta Pusat"
+  - location_state: "DKI Jakarta"
+
+## Important Guidelines
+
+1. **Be accurate**: Only extract information explicitly mentioned or clearly inferable from the conversation
+2. **Preserve context**: The description should be comprehensive, capturing all relevant details
+3. **Multi-category when appropriate**: Many issues affect multiple areas - don't hesitate to assign multiple categories
+4. **Use valid category slugs**: Only use slugs from the available categories list above
+5. **Infer provinces**: Use your knowledge of Indonesian geography to infer provinces from cities
+6. **Null for unknown**: If information is not provided or cannot be reliably inferred, set it to null
+7. **Location priority**: Street + City + Province is ideal; at minimum try to get City
+
+## Output Format
 
 You MUST respond with valid JSON that conforms to this schema:
 ```json
 {}
 ```
 
-Respond ONLY with the JSON object, no additional text or explanation."#,
+Respond ONLY with the JSON object, no additional text, explanation, or markdown formatting."#,
             ExtractedReportData::json_schema_string()
         )
     }
@@ -278,12 +412,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extracted_report_data_deserialize() {
+    fn test_extracted_report_data_deserialize_with_categories() {
         let json = r#"{
             "title": "Pothole on Main Street",
             "description": "Large pothole causing traffic issues",
-            "category_slug": "infrastructure",
-            "severity": "medium",
+            "categories": [
+                {"slug": "infrastructure", "severity": "high"},
+                {"slug": "public-safety", "severity": "medium"}
+            ],
+            "tag_type": "complaint",
             "timeline": "Started last week",
             "impact": "Affects daily commuters",
             "location_raw": "Jl. Sudirman No. 123"
@@ -291,8 +428,12 @@ mod tests {
 
         let data: ExtractedReportData = serde_json::from_str(json).unwrap();
         assert_eq!(data.title, "Pothole on Main Street");
-        assert_eq!(data.category_slug, Some("infrastructure".to_string()));
-        assert!(data.is_success()); // Default is true
+        assert_eq!(data.categories.len(), 2);
+        assert_eq!(data.categories[0].slug, "infrastructure");
+        assert_eq!(data.categories[0].severity, ReportSeverity::High);
+        assert_eq!(data.categories[1].slug, "public-safety");
+        assert_eq!(data.tag_type, Some(ReportTagType::Complaint));
+        assert!(data.is_success());
     }
 
     #[test]
@@ -300,8 +441,8 @@ mod tests {
         let json = r#"{
             "title": "Jalan Berlubang",
             "description": "Lubang besar di tengah jalan",
-            "category_slug": "infrastructure",
-            "severity": "high",
+            "categories": [{"slug": "infrastructure", "severity": "high"}],
+            "tag_type": "report",
             "timeline": "Sudah 2 minggu",
             "impact": "Banyak pengendara motor jatuh",
             "location_raw": "di depan warung Bu Sri, Jalan Tunjungan, Surabaya",
@@ -330,8 +471,8 @@ mod tests {
         let json = r#"{
             "title": "Test Report",
             "description": "Test description",
-            "category_slug": null,
-            "severity": null,
+            "categories": [],
+            "tag_type": null,
             "timeline": null,
             "impact": null,
             "location_raw": null,
@@ -343,8 +484,8 @@ mod tests {
 
         let data: ExtractedReportData = serde_json::from_str(json).unwrap();
         assert_eq!(data.title, "Test Report");
-        assert!(data.category_slug.is_none());
-        assert!(data.severity.is_none());
+        assert!(data.categories.is_empty());
+        assert!(data.tag_type.is_none());
         assert!(data.location_query.is_none());
         assert!(data.location_street.is_none());
         assert!(data.location_city.is_none());
@@ -353,7 +494,7 @@ mod tests {
 
     #[test]
     fn test_parse_with_fallback_valid_json() {
-        let input = r#"{"title": "Test", "description": "Test desc"}"#;
+        let input = r#"{"title": "Test", "description": "Test desc", "categories": []}"#;
 
         let result: ExtractedReportData = parse_with_fallback(input);
 
@@ -370,7 +511,7 @@ mod tests {
 {
     "title": "Markdown Test",
     "description": "From code block",
-    "category_slug": "infrastructure"
+    "categories": [{"slug": "infrastructure", "severity": "medium"}]
 }
 ```"#;
 
@@ -378,12 +519,13 @@ mod tests {
 
         assert!(result.is_success());
         assert_eq!(result.title, "Markdown Test");
-        assert_eq!(result.category_slug, Some("infrastructure".to_string()));
+        assert_eq!(result.categories.len(), 1);
+        assert_eq!(result.categories[0].slug, "infrastructure");
     }
 
     #[test]
     fn test_parse_with_fallback_with_trailing_comma() {
-        let input = r#"{"title": "Test", "description": "Desc",}"#;
+        let input = r#"{"title": "Test", "description": "Desc", "categories": [],}"#;
 
         let result: ExtractedReportData = parse_with_fallback(input);
 
@@ -424,8 +566,8 @@ mod tests {
         // Should contain field descriptions from schemars attributes
         assert!(schema.contains("title"));
         assert!(schema.contains("description"));
-        assert!(schema.contains("category_slug"));
-        assert!(schema.contains("severity"));
+        assert!(schema.contains("categories"));
+        assert!(schema.contains("tag_type"));
 
         // Should contain new location fields
         assert!(schema.contains("location_raw"));
@@ -441,16 +583,28 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_contains_schema() {
-        let prompt = ExtractionService::build_system_prompt();
+        // Test with empty categories (uses fallback)
+        let prompt = ExtractionService::build_system_prompt(&[]);
 
         // Should contain the schema
         assert!(prompt.contains("title"));
         assert!(prompt.contains("description"));
-        assert!(prompt.contains("category_slug"));
+        assert!(prompt.contains("categories"));
 
         // Should contain instructions
         assert!(prompt.contains("data extraction assistant"));
         assert!(prompt.contains("JSON"));
+
+        // Should contain multi-category instructions
+        assert!(prompt.contains("Multi-Category Support"));
+        assert!(prompt.contains("slug"));
+        assert!(prompt.contains("severity"));
+
+        // Should contain tag_type instructions
+        assert!(prompt.contains("tag_type"));
+        assert!(prompt.contains("report"));
+        assert!(prompt.contains("proposal"));
+        assert!(prompt.contains("complaint"));
 
         // Should contain location extraction instructions
         assert!(prompt.contains("Location Extraction"));
@@ -459,5 +613,57 @@ mod tests {
         assert!(prompt.contains("location_city"));
         assert!(prompt.contains("location_state"));
         assert!(prompt.contains("Jawa Timur")); // Example province
+    }
+
+    #[test]
+    fn test_build_system_prompt_with_dynamic_categories() {
+        let categories = vec![
+            CategoryInfo {
+                name: "Infrastructure".to_string(),
+                slug: "infrastructure".to_string(),
+                description: Some("Roads, bridges, and public facilities".to_string()),
+            },
+            CategoryInfo {
+                name: "Environment".to_string(),
+                slug: "environment".to_string(),
+                description: Some("Garbage, pollution, and green spaces".to_string()),
+            },
+        ];
+
+        let prompt = ExtractionService::build_system_prompt(&categories);
+
+        // Should contain the dynamic categories in the Available Category Slugs section
+        assert!(prompt.contains("`infrastructure` - Infrastructure"));
+        assert!(prompt.contains("Roads, bridges, and public facilities"));
+        assert!(prompt.contains("`environment` - Environment"));
+        assert!(prompt.contains("Garbage, pollution, and green spaces"));
+
+        // Should NOT contain fallback categories in the Available Category Slugs section
+        // (note: the examples section will still contain hardcoded examples)
+        assert!(!prompt.contains("- `public-safety` - Crime"));
+        assert!(!prompt.contains("- `social-welfare` - Poverty"));
+    }
+
+    #[test]
+    fn test_tag_types() {
+        let json = r#"{
+            "title": "Thank you",
+            "description": "Great service",
+            "categories": [],
+            "tag_type": "appreciation"
+        }"#;
+
+        let data: ExtractedReportData = serde_json::from_str(json).unwrap();
+        assert_eq!(data.tag_type, Some(ReportTagType::Appreciation));
+
+        let json2 = r#"{
+            "title": "How do I...",
+            "description": "Question about...",
+            "categories": [],
+            "tag_type": "inquiry"
+        }"#;
+
+        let data2: ExtractedReportData = serde_json::from_str(json2).unwrap();
+        assert_eq!(data2.tag_type, Some(ReportTagType::Inquiry));
     }
 }

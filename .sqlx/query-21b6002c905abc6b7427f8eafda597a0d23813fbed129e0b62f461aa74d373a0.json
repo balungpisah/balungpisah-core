@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO report_tags (report_id, tag_type)\n            VALUES ($1, $2)\n            ON CONFLICT (report_id, tag_type) DO NOTHING\n            RETURNING\n                id, report_id,\n                tag_type as \"tag_type: ReportTagType\",\n                created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "report_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "tag_type: ReportTagType",
+        "type_info": {
+          "Custom": {
+            "name": "report_tag_type",
+            "kind": {
+              "Enum": [
+                "report",
+                "proposal",
+                "complaint",
+                "inquiry",
+                "appreciation"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "report_tag_type",
+            "kind": {
+              "Enum": [
+                "report",
+                "proposal",
+                "complaint",
+                "inquiry",
+                "appreciation"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "21b6002c905abc6b7427f8eafda597a0d23813fbed129e0b62f461aa74d373a0"
+}

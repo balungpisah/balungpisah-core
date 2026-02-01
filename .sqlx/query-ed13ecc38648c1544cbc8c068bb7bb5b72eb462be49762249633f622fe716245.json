@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT v.id, v.district_id\n                FROM villages v\n                WHERE v.name ILIKE $1\n                   OR v.name ILIKE $2\n                   OR v.name ILIKE '%' || $1 || '%'\n                ORDER BY\n                    CASE\n                        WHEN v.name ILIKE $1 THEN 1\n                        WHEN v.name ILIKE $2 THEN 2\n                        ELSE 3\n                    END\n                LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "district_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ed13ecc38648c1544cbc8c068bb7bb5b72eb462be49762249633f622fe716245"
+}

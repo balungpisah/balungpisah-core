@@ -201,6 +201,11 @@ impl GeocodingService {
                     bounding_box,
                     geocoding_source: GeocodingSource::Nominatim,
                     geocoding_score,
+                    // Region FKs will be resolved by RegionLookupService
+                    province_id: None,
+                    regency_id: None,
+                    district_id: None,
+                    village_id: None,
                 }
             }
             None => CreateReportLocation {
@@ -221,6 +226,11 @@ impl GeocodingService {
                 bounding_box: None,
                 geocoding_source: GeocodingSource::Nominatim,
                 geocoding_score: None,
+                // Region FKs will be resolved by RegionLookupService
+                province_id: None,
+                regency_id: None,
+                district_id: None,
+                village_id: None,
             },
         }
     }

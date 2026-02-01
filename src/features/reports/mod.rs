@@ -4,4 +4,4 @@ pub mod models;
 pub mod routes;
 pub mod services;
 
-pub use services::{ClusteringService, GeocodingService, ReportService};
+pub use services::{ClusteringService, GeocodingService, RegionLookupService, ReportService};

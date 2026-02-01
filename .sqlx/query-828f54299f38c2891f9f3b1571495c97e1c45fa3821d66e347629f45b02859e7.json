@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT d.id, d.regency_id\n                FROM districts d\n                WHERE d.regency_id = $3\n                  AND (d.name ILIKE $1\n                       OR d.name ILIKE $2\n                       OR d.name ILIKE '%' || $1 || '%')\n                ORDER BY\n                    CASE\n                        WHEN d.name ILIKE $1 THEN 1\n                        WHEN d.name ILIKE $2 THEN 2\n                        ELSE 3\n                    END\n                LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "regency_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "828f54299f38c2891f9f3b1571495c97e1c45fa3821d66e347629f45b02859e7"
+}

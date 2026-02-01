@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO report_locations (\n                report_id, raw_input, display_name, lat, lon,\n                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,\n                bounding_box, geocoding_source, geocoding_score, geocoded_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())\n            RETURNING\n                id, report_id, raw_input, display_name, lat, lon,\n                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,\n                bounding_box, geocoding_source as \"geocoding_source: GeocodingSource\",\n                geocoding_score, geocoded_at, created_at\n            ",
+  "query": "\n            INSERT INTO report_locations (\n                report_id, raw_input, display_name, lat, lon,\n                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,\n                bounding_box, geocoding_source, geocoding_score, geocoded_at,\n                province_id, regency_id, district_id, village_id\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), $18, $19, $20, $21)\n            RETURNING\n                id, report_id, raw_input, display_name, lat, lon,\n                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,\n                bounding_box, geocoding_source as \"geocoding_source: GeocodingSource\",\n                geocoding_score, geocoded_at, created_at,\n                province_id, regency_id, district_id, village_id\n            ",
   "describe": {
     "columns": [
       {
@@ -113,6 +113,26 @@
         "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "province_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 21,
+        "name": "regency_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "district_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 23,
+        "name": "village_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -144,7 +164,11 @@
             }
           }
         },
-        "Numeric"
+        "Numeric",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -167,8 +191,12 @@
       false,
       true,
       true,
-      false
+      false,
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "faf52789cfcb8f1c7884b0249298b72789741758ef4556dbdfe4b70503fb7e5e"
+  "hash": "090b589c174a9a9a2fbf0e4a14955eeb08e8e6c315eb21d12776fef267b1f3a3"
 }

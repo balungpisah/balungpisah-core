@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, report_id, raw_input, display_name, lat, lon,\n                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,\n                bounding_box, geocoding_source as \"geocoding_source: GeocodingSource\",\n                geocoding_score, geocoded_at, created_at\n            FROM report_locations\n            WHERE report_id = $1\n            ",
+  "query": "\n            SELECT\n                id, report_id, raw_input, display_name, lat, lon,\n                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,\n                bounding_box, geocoding_source as \"geocoding_source: GeocodingSource\",\n                geocoding_score, geocoded_at, created_at,\n                province_id, regency_id, district_id, village_id\n            FROM report_locations\n            WHERE report_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -113,6 +113,26 @@
         "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "province_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 21,
+        "name": "regency_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "district_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 23,
+        "name": "village_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -140,8 +160,12 @@
       false,
       true,
       true,
-      false
+      false,
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "22a9508f576f928a61779ddd8d0dd64c91ed6210fffe620b2afee240302f6eda"
+  "hash": "49ef5aabd27371693c26506bd977bf97aca4dc21d7b363cfc881351fa9a58569"
 }

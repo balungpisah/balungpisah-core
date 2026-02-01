@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, ticket_id, cluster_id, title, description, category_id,\n                severity as \"severity: ReportSeverity\",\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at\n            FROM reports\n            WHERE cluster_id = $1\n            ORDER BY created_at DESC\n            ",
+  "query": "\n            SELECT\n                r.id, r.ticket_id, r.cluster_id, r.title, r.description,\n                r.timeline, r.impact,\n                r.status as \"status: ReportStatus\",\n                r.verified_at, r.verified_by, r.resolved_at, r.resolved_by, r.resolution_notes,\n                r.created_at, r.updated_at\n            FROM reports r\n            JOIN tickets t ON t.id = r.ticket_id\n            WHERE t.user_id = $1\n            ORDER BY r.created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -30,38 +30,16 @@
       },
       {
         "ordinal": 5,
-        "name": "category_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 6,
-        "name": "severity: ReportSeverity",
-        "type_info": {
-          "Custom": {
-            "name": "report_severity",
-            "kind": {
-              "Enum": [
-                "low",
-                "medium",
-                "high",
-                "critical"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "ordinal": 7,
         "name": "timeline",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "impact",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "status: ReportStatus",
         "type_info": {
           "Custom": {
@@ -80,44 +58,44 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 8,
         "name": "verified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 9,
         "name": "verified_by",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 12,
+        "ordinal": 10,
         "name": "resolved_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 11,
         "name": "resolved_by",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 14,
+        "ordinal": 12,
         "name": "resolution_notes",
         "type_info": "Text"
       },
       {
-        "ordinal": 15,
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 14,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -126,8 +104,6 @@
       true,
       false,
       false,
-      true,
-      true,
       true,
       true,
       false,
@@ -140,5 +116,5 @@
       false
     ]
   },
-  "hash": "cd441ca991060db69a2a63d9fb9ea4f0fea421273c172d9f7dd1d126c8b468ca"
+  "hash": "02a085dab79ff38e806b9b10ff333f736877a600f32f4ab643950b0cfb95ac72"
 }

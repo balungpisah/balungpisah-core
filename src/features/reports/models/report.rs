@@ -32,11 +32,14 @@ impl std::fmt::Display for ReportStatus {
 }
 
 /// Report severity enum matching database enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema, JsonSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema, JsonSchema, Default,
+)]
 #[sqlx(type_name = "report_severity", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum ReportSeverity {
     Low,
+    #[default]
     Medium,
     High,
     Critical,
@@ -62,8 +65,6 @@ pub struct Report {
     pub cluster_id: Option<Uuid>,
     pub title: String,
     pub description: String,
-    pub category_id: Option<Uuid>,
-    pub severity: Option<ReportSeverity>,
     pub timeline: Option<String>,
     pub impact: Option<String>,
     pub status: ReportStatus,
@@ -82,8 +83,6 @@ pub struct CreateReport {
     pub ticket_id: Uuid,
     pub title: String,
     pub description: String,
-    pub category_id: Option<Uuid>,
-    pub severity: Option<ReportSeverity>,
     pub timeline: Option<String>,
     pub impact: Option<String>,
 }

@@ -49,6 +49,11 @@ pub struct ReportLocation {
     pub geocoding_score: Option<Decimal>,
     pub geocoded_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    // Regional clustering FKs
+    pub province_id: Option<Uuid>,
+    pub regency_id: Option<Uuid>,
+    pub district_id: Option<Uuid>,
+    pub village_id: Option<Uuid>,
 }
 
 /// Data for creating a new report location
@@ -71,4 +76,9 @@ pub struct CreateReportLocation {
     pub bounding_box: Option<serde_json::Value>,
     pub geocoding_source: GeocodingSource,
     pub geocoding_score: Option<Decimal>,
+    // Regional clustering FKs
+    pub province_id: Option<Uuid>,
+    pub regency_id: Option<Uuid>,
+    pub district_id: Option<Uuid>,
+    pub village_id: Option<Uuid>,
 }
