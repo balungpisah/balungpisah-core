@@ -30,7 +30,7 @@ impl DashboardService {
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('week', CURRENT_DATE)) as "reports_this_week!",
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE)) as "reports_this_month!"
             FROM reports
-            WHERE status NOT IN ('draft', 'rejected')
+            WHERE status NOT IN ('rejected')
             "#
         )
         .fetch_one(&self.pool)
@@ -64,7 +64,7 @@ impl DashboardService {
 
         // Get total count
         let total = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) as "count!" FROM reports WHERE status NOT IN ('draft', 'rejected')"#
+            r#"SELECT COUNT(*) as "count!" FROM reports WHERE status NOT IN ('rejected')"#
         )
         .fetch_one(&self.pool)
         .await
@@ -85,7 +85,7 @@ impl DashboardService {
                 r.impact,
                 r.created_at
             FROM reports r
-            WHERE r.status NOT IN ('draft', 'rejected')
+            WHERE r.status NOT IN ('rejected')
             ORDER BY r.created_at DESC
             OFFSET $1 LIMIT $2
             "#,
@@ -205,7 +205,7 @@ impl DashboardService {
                 FROM reports r
                 JOIN report_locations rl ON rl.report_id = r.id
                 WHERE rl.regency_id = $1
-                  AND r.status NOT IN ('draft', 'rejected')
+                  AND r.status NOT IN ('rejected')
                 "#,
                 regency_id
             )
@@ -245,7 +245,7 @@ impl DashboardService {
                 COUNT(rl.id) as "report_count!"
             FROM provinces p
             LEFT JOIN report_locations rl ON rl.province_id = p.id
-            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('draft', 'rejected')
+            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('rejected')
             GROUP BY p.id, p.name, p.code, p.lat, p.lng
             HAVING COUNT(rl.id) > 0
             ORDER BY COUNT(rl.id) DESC, p.name ASC
@@ -284,7 +284,7 @@ impl DashboardService {
                 COUNT(rl.id) as "report_count!"
             FROM regencies rg
             LEFT JOIN report_locations rl ON rl.regency_id = rg.id
-            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('draft', 'rejected')
+            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('rejected')
             WHERE rg.province_id = $1
             GROUP BY rg.id, rg.province_id, rg.name, rg.code, rg.lat, rg.lng
             HAVING COUNT(rl.id) > 0
@@ -332,7 +332,7 @@ impl DashboardService {
             FROM reports r
             JOIN report_locations rl ON rl.report_id = r.id
             WHERE rl.regency_id = $1
-              AND r.status NOT IN ('draft', 'rejected')
+              AND r.status NOT IN ('rejected')
             ORDER BY r.created_at DESC
             OFFSET $2 LIMIT $3
             "#,
@@ -394,7 +394,7 @@ impl DashboardService {
                 JOIN report_categories rc ON rc.report_id = r.id
                 JOIN categories c ON c.id = rc.category_id
                 WHERE c.slug = $1
-                  AND r.status NOT IN ('draft', 'rejected')
+                  AND r.status NOT IN ('rejected')
                 "#,
                 slug
             )
@@ -432,7 +432,7 @@ impl DashboardService {
                 COUNT(DISTINCT rc.report_id) as "report_count!"
             FROM categories c
             LEFT JOIN report_categories rc ON rc.category_id = c.id
-            LEFT JOIN reports r ON r.id = rc.report_id AND r.status NOT IN ('draft', 'rejected')
+            LEFT JOIN reports r ON r.id = rc.report_id AND r.status NOT IN ('rejected')
             WHERE c.is_active = true
             GROUP BY c.id, c.name, c.slug, c.description, c.color, c.icon, c.display_order
             ORDER BY COUNT(DISTINCT rc.report_id) DESC, c.display_order ASC
@@ -479,7 +479,7 @@ impl DashboardService {
             JOIN report_categories rc ON rc.report_id = r.id
             JOIN categories c ON c.id = rc.category_id
             WHERE c.slug = $1
-              AND r.status NOT IN ('draft', 'rejected')
+              AND r.status NOT IN ('rejected')
             ORDER BY r.created_at DESC
             OFFSET $2 LIMIT $3
             "#,
@@ -524,7 +524,11 @@ impl DashboardService {
     /// Get tag overview with optional report listing
     pub async fn get_by_tag(&self, params: &TagQueryParams) -> Result<DashboardTagOverviewDto> {
         // Get tag summary
-        let tags = self.get_tag_summary().await?;
+        let tags = if let Some(tag_type) = &params.tag_type {
+            self.get_tag_summary_filtered(Some(tag_type)).await? 
+        } else {
+            self.get_tag_summary().await?
+        };
 
         // If tag_type provided, get reports
         let (reports, pagination) = if let Some(tag_type) = &params.tag_type {
@@ -537,7 +541,7 @@ impl DashboardService {
                 FROM reports r
                 JOIN report_tags rt ON rt.report_id = r.id
                 WHERE rt.tag_type = $1
-                  AND r.status NOT IN ('draft', 'rejected')
+                  AND r.status NOT IN ('rejected')
                 "#,
                 tag_type as &ReportTagType
             )
@@ -570,7 +574,7 @@ impl DashboardService {
                 COUNT(*) as "report_count!"
             FROM report_tags rt
             JOIN reports r ON r.id = rt.report_id
-            WHERE r.status NOT IN ('draft', 'rejected')
+            WHERE r.status NOT IN ('rejected')
             GROUP BY rt.tag_type
             ORDER BY COUNT(*) DESC
             "#
@@ -592,6 +596,38 @@ impl DashboardService {
             .collect())
     }
 
+    async fn get_tag_summary_filtered(&self, filter_tag: Option<&ReportTagType>) -> Result<Vec<TagReportSummary>> {
+        // Convert the enum to a string if it exists
+        let filter_str = filter_tag.map(|t| format!("{:?}", t).to_lowercase());
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT 
+                rt.tag_type as "tag_type: ReportTagType",
+                COUNT(r.id) as "report_count!"
+            FROM report_tags rt
+            JOIN reports r ON r.id = rt.report_id
+            WHERE ($1::TEXT IS NULL OR rt.tag_type::TEXT = $1::TEXT)
+            AND r.status NOT IN ('rejected')
+            GROUP BY rt.tag_type
+            "#,
+            filter_str // This is $1
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch tag summary: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        // Map rows to TagReportSummary
+        Ok(rows.into_iter().map(|row| TagReportSummary {
+            tag_type: row.tag_type,
+            label: format!("{:?}", row.tag_type), 
+            report_count: row.report_count,
+        }).collect())
+    }
+
     async fn get_reports_by_tag(
         &self,
         tag_type: &ReportTagType,
@@ -610,8 +646,8 @@ impl DashboardService {
                 r.created_at
             FROM reports r
             JOIN report_tags rt ON rt.report_id = r.id
-            WHERE rt.tag_type = $1
-              AND r.status NOT IN ('draft', 'rejected')
+            WHERE rt.tag_type::TEXT = $1::TEXT
+              AND r.status NOT IN ('rejected')
             ORDER BY r.created_at DESC
             OFFSET $2 LIMIT $3
             "#,
@@ -663,7 +699,7 @@ impl DashboardService {
             SELECT COUNT(*) as "count!"
             FROM reports
             WHERE created_at >= CURRENT_DATE - $1::int
-              AND status NOT IN ('draft', 'rejected')
+              AND status NOT IN ('rejected')
             "#,
             days
         )
@@ -686,7 +722,7 @@ impl DashboardService {
                 r.created_at
             FROM reports r
             WHERE r.created_at >= CURRENT_DATE - $1::int
-              AND r.status NOT IN ('draft', 'rejected')
+              AND r.status NOT IN ('rejected')
             ORDER BY r.created_at DESC
             LIMIT $2
             "#,
@@ -752,7 +788,7 @@ impl DashboardService {
             LEFT JOIN categories c ON c.id = rc.category_id
             WHERE rl.lat IS NOT NULL
               AND rl.lon IS NOT NULL
-              AND r.status NOT IN ('draft', 'rejected')
+              AND r.status NOT IN ('rejected')
               AND ($1::uuid IS NULL OR rl.province_id = $1)
               AND ($2::uuid IS NULL OR rl.regency_id = $2)
               AND ($3::text IS NULL OR c.slug = $3)
