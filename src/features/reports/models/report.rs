@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Type};
 use utoipa::ToSchema;
@@ -31,7 +32,7 @@ impl std::fmt::Display for ReportStatus {
 }
 
 /// Report severity enum matching database enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema, JsonSchema)]
 #[sqlx(type_name = "report_severity", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum ReportSeverity {

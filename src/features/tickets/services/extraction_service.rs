@@ -1,23 +1,74 @@
 use balungpisah_adk::{MessageStorage, PostgresStorage};
 use balungpisah_tensorzero::{InferenceRequestBuilder, InputMessage, TensorZeroClient};
-use regex::Regex;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
 use crate::features::reports::models::ReportSeverity;
+use crate::shared::llm::{parse_with_fallback, LlmResponse};
+
+fn default_true() -> bool {
+    true
+}
 
 /// Extracted report data from a conversation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+#[schemars(title = "ExtractedReportData")]
 pub struct ExtractedReportData {
+    #[schemars(description = "Concise title for the report (max 200 characters)")]
     pub title: String,
+
+    #[schemars(description = "Detailed description of the issue")]
     pub description: String,
+
+    #[schemars(
+        description = "Category slug: infrastructure, environment, public-safety, social-welfare, or other"
+    )]
     pub category_slug: Option<String>,
+
+    #[schemars(description = "Severity level: low, medium, high, or critical")]
     pub severity: Option<ReportSeverity>,
+
+    #[schemars(description = "When the issue started or occurred")]
     pub timeline: Option<String>,
+
+    #[schemars(description = "Who or how many people are affected")]
     pub impact: Option<String>,
+
+    #[schemars(
+        description = "Raw location description from the user (address, landmark, area name)"
+    )]
     pub location_raw: Option<String>,
+
+    /// Whether the LLM extraction was successful
+    #[serde(default = "default_true")]
+    #[schemars(skip)]
+    pub is_llm_success: bool,
+
+    /// Error message if LLM extraction failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub llm_error_message: Option<String>,
+}
+
+impl LlmResponse for ExtractedReportData {
+    fn mark_as_fallback(&mut self, error_message: String) {
+        self.is_llm_success = false;
+        self.llm_error_message = Some(error_message);
+        // Set reasonable defaults for required fields
+        if self.title.is_empty() {
+            self.title = "Laporan Warga".to_string();
+        }
+        if self.description.is_empty() {
+            self.description = "Deskripsi tidak tersedia - ekstraksi gagal".to_string();
+        }
+    }
+
+    fn is_success(&self) -> bool {
+        self.is_llm_success
+    }
 }
 
 /// Service for extracting structured data from conversations using TensorZero
@@ -99,10 +150,11 @@ impl ExtractionService {
 
     /// Extract structured data from raw conversation text
     ///
-    /// Uses TensorZero inference with JSON schema embedded in system prompt
+    /// Uses TensorZero inference with JSON schema embedded in system prompt.
+    /// Uses graceful fallback parsing - never fails, returns default values on parse errors.
     pub async fn extract_from_text(&self, conversation: &str) -> Result<ExtractedReportData> {
-        let system_prompt = self.build_system_prompt();
-        let user_prompt = self.build_user_prompt(conversation);
+        let system_prompt = Self::build_system_prompt();
+        let user_prompt = Self::build_user_prompt(conversation);
 
         // Build inference request with schema in system prompt (avoiding output_schema bug)
         let request = InferenceRequestBuilder::new()
@@ -124,7 +176,7 @@ impl ExtractionService {
             AppError::ExternalServiceError(format!("LLM extraction failed: {}", e))
         })?;
 
-        // Get text content and parse as JSON
+        // Get text content and parse with fallback
         let text = response.text();
 
         tracing::debug!(
@@ -132,126 +184,22 @@ impl ExtractionService {
             text.chars().take(500).collect::<String>()
         );
 
-        // Try to extract JSON from the response (handle markdown code blocks)
-        let json_str = match Self::extract_json_string(&text) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::error!(
-                    "Failed to extract JSON from response: {}, raw text: {}",
-                    e,
-                    text
-                );
-                return Err(AppError::Internal(format!(
-                    "Failed to extract JSON from response: {}",
-                    e
-                )));
-            }
-        };
+        // Use the reusable parser with graceful fallback
+        let extracted: ExtractedReportData = parse_with_fallback(&text);
 
-        tracing::debug!(
-            "Extracted JSON (first 500 chars): {}",
-            json_str.chars().take(500).collect::<String>()
-        );
-
-        // Try parsing directly first (fast path)
-        match serde_json::from_str::<ExtractedReportData>(&json_str) {
-            Ok(parsed) => {
-                tracing::debug!("JSON parsed successfully (fast path)");
-                Ok(parsed)
-            }
-            Err(direct_err) => {
-                tracing::debug!(
-                    "Direct JSON parsing failed: {:?}, attempting quick fixes",
-                    direct_err
-                );
-
-                // Apply quick fixes
-                let mut fixed_json = Self::fix_js_string_concatenation(&json_str);
-                fixed_json = Self::fix_trailing_commas(&fixed_json);
-
-                // Try parsing after fixes
-                serde_json::from_str::<ExtractedReportData>(&fixed_json).map_err(|e| {
-                    tracing::error!(
-                        "Failed to parse extraction response after fixes: {:?}, raw text: {}",
-                        e,
-                        text
-                    );
-                    AppError::Internal(format!("Failed to parse extraction response: {}", e))
-                })
-            }
+        if !extracted.is_success() {
+            tracing::warn!(
+                "LLM extraction used fallback: {:?}",
+                extracted.llm_error_message
+            );
         }
+
+        Ok(extracted)
     }
 
-    /// Extract JSON string from text (handles multiple formats)
-    ///
-    /// Tries in order:
-    /// 1. JSON in markdown code block: ```json ... ```
-    /// 2. Plain JSON starting with {
-    /// 3. JSON embedded anywhere in text (find { to })
-    fn extract_json_string(text: &str) -> std::result::Result<String, String> {
-        // Try 1: Markdown code block with json
-        if text.contains("```json") {
-            return text
-                .split("```json")
-                .nth(1)
-                .and_then(|s| s.split("```").next())
-                .map(|s| s.trim().to_string())
-                .ok_or_else(|| "Failed to extract JSON from markdown code block".to_string());
-        }
-
-        // Try 2: Generic markdown code block
-        if text.contains("```") {
-            if let Some(start) = text.find("```") {
-                let block_start = start + 3;
-                // Skip optional language identifier on the same line
-                if let Some(newline_offset) = text[block_start..].find('\n') {
-                    let json_start = block_start + newline_offset + 1;
-                    if let Some(end_offset) = text[json_start..].find("```") {
-                        return Ok(text[json_start..json_start + end_offset].trim().to_string());
-                    }
-                }
-            }
-        }
-
-        // Try 3: Plain JSON starting with {
-        let trimmed = text.trim();
-        if trimmed.starts_with('{') {
-            return Ok(trimmed.to_string());
-        }
-
-        // Try 4: Embedded JSON (find first { to last })
-        let start = text
-            .find('{')
-            .ok_or_else(|| "No JSON object found in response".to_string())?;
-
-        let end = text
-            .rfind('}')
-            .ok_or_else(|| "Incomplete JSON object in response".to_string())?;
-
-        if start < end {
-            Ok(text[start..=end].to_string())
-        } else {
-            Err("Invalid JSON boundaries in response".to_string())
-        }
-    }
-
-    /// Fix trailing commas in JSON (common LLM mistake)
-    fn fix_trailing_commas(json_str: &str) -> String {
-        let re = Regex::new(r",(\s*[}\]])").unwrap();
-        re.replace_all(json_str, "$1").to_string()
-    }
-
-    /// Fix JavaScript string concatenation which is invalid in JSON
-    ///
-    /// LLMs sometimes output: `"str1" + "str2"` which is invalid JSON.
-    /// This merges them into: `"str1str2"`
-    fn fix_js_string_concatenation(json_str: &str) -> String {
-        let re = Regex::new(r#""\s*\+\s*""#).unwrap();
-        re.replace_all(json_str, "").to_string()
-    }
-
-    fn build_system_prompt(&self) -> String {
-        r#"You are a data extraction assistant for a citizen report system. Your task is to extract structured information from conversations between citizens and an AI assistant about issues they want to report.
+    fn build_system_prompt() -> String {
+        format!(
+            r#"You are a data extraction assistant for a citizen report system. Your task is to extract structured information from conversations between citizens and an AI assistant about issues they want to report.
 
 Extract the following information:
 - title: A concise title for the report (max 200 characters)
@@ -266,49 +214,15 @@ Be accurate and only extract information that is explicitly mentioned in the con
 
 You MUST respond with valid JSON that conforms to this schema:
 ```json
-{
-    "type": "object",
-    "properties": {
-        "title": {
-            "type": "string",
-            "description": "Concise title for the report (max 200 chars)"
-        },
-        "description": {
-            "type": "string",
-            "description": "Detailed description of the issue"
-        },
-        "category_slug": {
-            "type": ["string", "null"],
-            "enum": ["infrastructure", "environment", "public-safety", "social-welfare", "other", null],
-            "description": "Category of the report"
-        },
-        "severity": {
-            "type": ["string", "null"],
-            "enum": ["low", "medium", "high", "critical", null],
-            "description": "Severity level of the issue"
-        },
-        "timeline": {
-            "type": ["string", "null"],
-            "description": "When the issue started or occurred"
-        },
-        "impact": {
-            "type": ["string", "null"],
-            "description": "Who or how many people are affected"
-        },
-        "location_raw": {
-            "type": ["string", "null"],
-            "description": "Raw location description from the user"
-        }
-    },
-    "required": ["title", "description"],
-    "additionalProperties": false
-}
+{}
 ```
 
-Respond ONLY with the JSON object, no additional text or explanation."#.to_string()
+Respond ONLY with the JSON object, no additional text or explanation."#,
+            ExtractedReportData::json_schema_string()
+        )
     }
 
-    fn build_user_prompt(&self, conversation: &str) -> String {
+    fn build_user_prompt(conversation: &str) -> String {
         format!(
             "Extract structured report data from this conversation:\n\n{}",
             conversation
@@ -335,6 +249,7 @@ mod tests {
         let data: ExtractedReportData = serde_json::from_str(json).unwrap();
         assert_eq!(data.title, "Pothole on Main Street");
         assert_eq!(data.category_slug, Some("infrastructure".to_string()));
+        assert!(data.is_success()); // Default is true
     }
 
     #[test]
@@ -356,99 +271,97 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_json_string_with_json_code_block() {
-        let response = r#"Here is the extracted data:
+    fn test_parse_with_fallback_valid_json() {
+        let input = r#"{"title": "Test", "description": "Test desc"}"#;
+
+        let result: ExtractedReportData = parse_with_fallback(input);
+
+        assert!(result.is_success());
+        assert_eq!(result.title, "Test");
+        assert_eq!(result.description, "Test desc");
+    }
+
+    #[test]
+    fn test_parse_with_fallback_markdown_code_block() {
+        let input = r#"Here's the result:
 
 ```json
 {
-    "title": "Test",
-    "description": "Test desc"
-}
-```
-
-That's the result."#;
-
-        let json = ExtractionService::extract_json_string(response).unwrap();
-        assert!(json.starts_with('{'));
-        assert!(json.ends_with('}'));
-        assert!(json.contains("\"title\""));
-    }
-
-    #[test]
-    fn test_extract_json_string_with_generic_code_block() {
-        let response = r#"```
-{
-    "title": "Test",
-    "description": "Test desc"
+    "title": "Markdown Test",
+    "description": "From code block",
+    "category_slug": "infrastructure"
 }
 ```"#;
 
-        let json = ExtractionService::extract_json_string(response).unwrap();
-        assert!(json.starts_with('{'));
-        assert!(json.ends_with('}'));
+        let result: ExtractedReportData = parse_with_fallback(input);
+
+        assert!(result.is_success());
+        assert_eq!(result.title, "Markdown Test");
+        assert_eq!(result.category_slug, Some("infrastructure".to_string()));
     }
 
     #[test]
-    fn test_extract_json_string_plain_json() {
-        let response = r#"{"title": "Test", "description": "Test desc"}"#;
+    fn test_parse_with_fallback_with_trailing_comma() {
+        let input = r#"{"title": "Test", "description": "Desc",}"#;
 
-        let json = ExtractionService::extract_json_string(response).unwrap();
-        assert_eq!(json, response);
+        let result: ExtractedReportData = parse_with_fallback(input);
+
+        assert!(result.is_success());
+        assert_eq!(result.title, "Test");
     }
 
     #[test]
-    fn test_extract_json_string_with_whitespace() {
-        let response = r#"
+    fn test_parse_with_fallback_invalid_returns_fallback() {
+        let input = "This is not JSON at all";
 
-{"title": "Test", "description": "Test desc"}
+        let result: ExtractedReportData = parse_with_fallback(input);
 
-"#;
-
-        let json = ExtractionService::extract_json_string(response).unwrap();
-        assert!(json.starts_with('{'));
-        assert!(json.ends_with('}'));
+        assert!(!result.is_success());
+        assert!(result.llm_error_message.is_some());
+        // Fallback sets default values
+        assert_eq!(result.title, "Laporan Warga");
+        assert_eq!(
+            result.description,
+            "Deskripsi tidak tersedia - ekstraksi gagal"
+        );
     }
 
     #[test]
-    fn test_extract_json_string_embedded() {
-        let response =
-            "Some text before {\"title\": \"Test\", \"description\": \"desc\"} some text after";
+    fn test_llm_response_trait_mark_as_fallback() {
+        let mut data = ExtractedReportData::default();
+        data.mark_as_fallback("Test error".to_string());
 
-        let json = ExtractionService::extract_json_string(response).unwrap();
-        assert_eq!(json, r#"{"title": "Test", "description": "desc"}"#);
+        assert!(!data.is_success());
+        assert_eq!(data.llm_error_message, Some("Test error".to_string()));
+        assert_eq!(data.title, "Laporan Warga"); // Default fallback title
     }
 
     #[test]
-    fn test_extract_json_string_no_json() {
-        let response = "No JSON here at all!";
+    fn test_json_schema_string_generation() {
+        let schema = ExtractedReportData::json_schema_string();
 
-        let result = ExtractionService::extract_json_string(response);
-        assert!(result.is_err());
+        // Should contain field descriptions from schemars attributes
+        assert!(schema.contains("title"));
+        assert!(schema.contains("description"));
+        assert!(schema.contains("category_slug"));
+        assert!(schema.contains("severity"));
+
+        // Should NOT contain internal fields (marked with #[schemars(skip)])
+        assert!(!schema.contains("is_llm_success"));
+        assert!(!schema.contains("llm_error_message"));
     }
 
     #[test]
-    fn test_fix_trailing_commas() {
-        // Should remove trailing comma before }
-        let input = r#"{"name": "John", "age": 30,}"#;
-        let fixed = ExtractionService::fix_trailing_commas(input);
-        assert_eq!(fixed, r#"{"name": "John", "age": 30}"#);
+    fn test_build_system_prompt_contains_schema() {
+        let prompt = ExtractionService::build_system_prompt();
 
-        // Should remove trailing comma before ]
-        let input2 = r#"{"items": [1, 2, 3,]}"#;
-        let fixed2 = ExtractionService::fix_trailing_commas(input2);
-        assert_eq!(fixed2, r#"{"items": [1, 2, 3]}"#);
-    }
+        // Should contain the schema
+        assert!(prompt.contains("title"));
+        assert!(prompt.contains("description"));
+        assert!(prompt.contains("category_slug"));
 
-    #[test]
-    fn test_fix_js_string_concatenation() {
-        // Basic concatenation
-        let input = r#"{"text": "hello" + "world"}"#;
-        let fixed = ExtractionService::fix_js_string_concatenation(input);
-        assert_eq!(fixed, r#"{"text": "helloworld"}"#);
-
-        // Multiple concatenations
-        let input2 = r#"{"msg": "a" + "b" + "c"}"#;
-        let fixed2 = ExtractionService::fix_js_string_concatenation(input2);
-        assert_eq!(fixed2, r#"{"msg": "abc"}"#);
+        // Should contain instructions
+        assert!(prompt.contains("data extraction assistant"));
+        assert!(prompt.contains("JSON"));
     }
 }
