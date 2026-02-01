@@ -61,7 +61,7 @@ impl GeocodingService {
         }
     }
 
-    /// Geocode a raw location input using Nominatim
+    /// Geocode a raw location input using Nominatim free-form query
     pub async fn geocode(&self, raw_input: &str) -> Result<Option<NominatimResponse>> {
         let url = format!(
             "{}/search?q={}&format=json&addressdetails=1&limit=1&countrycodes=id",
@@ -69,9 +69,80 @@ impl GeocodingService {
             urlencoding::encode(raw_input)
         );
 
-        tracing::debug!("Geocoding: {} -> {}", raw_input, url);
+        tracing::debug!("Geocoding (free-form): {} -> {}", raw_input, url);
 
-        let response = self.client.get(&url).send().await.map_err(|e| {
+        self.execute_request(&url).await
+    }
+
+    /// Geocode using structured parameters for better accuracy
+    ///
+    /// Uses Nominatim's structured search with street, city, and state parameters.
+    /// Falls back to free-form query if structured search returns no results.
+    pub async fn geocode_structured(
+        &self,
+        query: Option<&str>,
+        street: Option<&str>,
+        city: Option<&str>,
+        state: Option<&str>,
+    ) -> Result<Option<NominatimResponse>> {
+        // Try structured search first if we have street, city, or state
+        if street.is_some() || city.is_some() || state.is_some() {
+            let mut params = vec![
+                ("format", "json".to_string()),
+                ("addressdetails", "1".to_string()),
+                ("limit", "1".to_string()),
+                ("country", "Indonesia".to_string()),
+            ];
+
+            if let Some(s) = street {
+                params.push(("street", s.to_string()));
+            }
+            if let Some(c) = city {
+                params.push(("city", c.to_string()));
+            }
+            if let Some(st) = state {
+                params.push(("state", st.to_string()));
+            }
+
+            let query_string = params
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, urlencoding::encode(v)))
+                .collect::<Vec<_>>()
+                .join("&");
+
+            let url = format!("{}/search?{}", self.base_url, query_string);
+            tracing::debug!(
+                "Geocoding (structured): {:?}/{:?}/{:?} -> {}",
+                street,
+                city,
+                state,
+                url
+            );
+
+            if let Some(result) = self.execute_request(&url).await? {
+                return Ok(Some(result));
+            }
+
+            tracing::debug!("Structured search returned no results, trying free-form query");
+        }
+
+        // Fall back to free-form query if available
+        if let Some(q) = query {
+            let url = format!(
+                "{}/search?q={}&format=json&addressdetails=1&limit=1&countrycodes=id",
+                self.base_url,
+                urlencoding::encode(q)
+            );
+            tracing::debug!("Geocoding (free-form fallback): {} -> {}", q, url);
+            return self.execute_request(&url).await;
+        }
+
+        Ok(None)
+    }
+
+    /// Execute HTTP request to Nominatim and parse response
+    async fn execute_request(&self, url: &str) -> Result<Option<NominatimResponse>> {
+        let response = self.client.get(url).send().await.map_err(|e| {
             tracing::error!("Nominatim request failed: {:?}", e);
             AppError::ExternalServiceError(format!("Nominatim request failed: {}", e))
         })?;

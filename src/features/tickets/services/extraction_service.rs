@@ -42,6 +42,26 @@ pub struct ExtractedReportData {
     )]
     pub location_raw: Option<String>,
 
+    #[schemars(
+        description = "Structured query for geocoding - combines street name with nearby landmark (e.g., 'Jalan Tunjungan dekat Tugu Pahlawan, Surabaya')"
+    )]
+    pub location_query: Option<String>,
+
+    #[schemars(
+        description = "Street name extracted from location (e.g., 'Jalan Pemuda', 'Gang Melati')"
+    )]
+    pub location_street: Option<String>,
+
+    #[schemars(
+        description = "City or kabupaten name (e.g., 'Surabaya', 'Kabupaten Sidoarjo', 'Kota Malang')"
+    )]
+    pub location_city: Option<String>,
+
+    #[schemars(
+        description = "Province/state name (e.g., 'Jawa Timur', 'DKI Jakarta', 'Jawa Barat')"
+    )]
+    pub location_state: Option<String>,
+
     /// Whether the LLM extraction was successful
     #[serde(default = "default_true")]
     #[schemars(skip)]
@@ -199,7 +219,7 @@ impl ExtractionService {
 
     fn build_system_prompt() -> String {
         format!(
-            r#"You are a data extraction assistant for a citizen report system. Your task is to extract structured information from conversations between citizens and an AI assistant about issues they want to report.
+            r#"You are a data extraction assistant for a citizen report system in Indonesia. Your task is to extract structured information from conversations between citizens and an AI assistant about issues they want to report.
 
 Extract the following information:
 - title: A concise title for the report (max 200 characters)
@@ -208,9 +228,32 @@ Extract the following information:
 - severity: One of: low, medium, high, critical
 - timeline: When the issue started or when it occurred
 - impact: Who or how many people are affected
-- location_raw: The raw location description (address, landmark, area name)
 
-Be accurate and only extract information that is explicitly mentioned in the conversation. If information is not provided, set it to null.
+## Location Extraction (IMPORTANT)
+Extract location information into structured fields for geocoding:
+
+- location_raw: The original location description exactly as mentioned by the user
+- location_query: A structured query combining street and landmark for geocoding (e.g., "Jalan Tunjungan dekat Tugu Pahlawan, Surabaya"). Include nearby landmarks if mentioned.
+- location_street: Just the street/road name (e.g., "Jalan Pemuda", "Gang Melati", "Jl. Raya Darmo"). Extract from "Jl.", "Jalan", "Gang", "Gg." prefixes.
+- location_city: City or kabupaten name (e.g., "Surabaya", "Sidoarjo", "Malang"). Remove "Kota" or "Kabupaten" prefix if present.
+- location_state: Province name (e.g., "Jawa Timur", "DKI Jakarta"). If not explicitly mentioned, infer from the city if possible (e.g., Surabaya -> Jawa Timur).
+
+Examples:
+- Input: "di depan warung Bu Sri, Jalan Tunjungan, Surabaya"
+  - location_raw: "di depan warung Bu Sri, Jalan Tunjungan, Surabaya"
+  - location_query: "Jalan Tunjungan dekat warung Bu Sri, Surabaya"
+  - location_street: "Jalan Tunjungan"
+  - location_city: "Surabaya"
+  - location_state: "Jawa Timur"
+
+- Input: "Gang Sempit RT 5 RW 3, Kelurahan Wonokromo"
+  - location_raw: "Gang Sempit RT 5 RW 3, Kelurahan Wonokromo"
+  - location_query: "Gang Sempit, Wonokromo"
+  - location_street: "Gang Sempit"
+  - location_city: null (kelurahan is not city-level)
+  - location_state: null
+
+Be accurate and only extract information that is explicitly mentioned in the conversation. If information is not provided or cannot be inferred, set it to null.
 
 You MUST respond with valid JSON that conforms to this schema:
 ```json
@@ -253,6 +296,36 @@ mod tests {
     }
 
     #[test]
+    fn test_extracted_report_data_with_structured_location() {
+        let json = r#"{
+            "title": "Jalan Berlubang",
+            "description": "Lubang besar di tengah jalan",
+            "category_slug": "infrastructure",
+            "severity": "high",
+            "timeline": "Sudah 2 minggu",
+            "impact": "Banyak pengendara motor jatuh",
+            "location_raw": "di depan warung Bu Sri, Jalan Tunjungan, Surabaya",
+            "location_query": "Jalan Tunjungan dekat warung Bu Sri, Surabaya",
+            "location_street": "Jalan Tunjungan",
+            "location_city": "Surabaya",
+            "location_state": "Jawa Timur"
+        }"#;
+
+        let data: ExtractedReportData = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            data.location_raw,
+            Some("di depan warung Bu Sri, Jalan Tunjungan, Surabaya".to_string())
+        );
+        assert_eq!(
+            data.location_query,
+            Some("Jalan Tunjungan dekat warung Bu Sri, Surabaya".to_string())
+        );
+        assert_eq!(data.location_street, Some("Jalan Tunjungan".to_string()));
+        assert_eq!(data.location_city, Some("Surabaya".to_string()));
+        assert_eq!(data.location_state, Some("Jawa Timur".to_string()));
+    }
+
+    #[test]
     fn test_extracted_report_data_with_nulls() {
         let json = r#"{
             "title": "Test Report",
@@ -261,13 +334,21 @@ mod tests {
             "severity": null,
             "timeline": null,
             "impact": null,
-            "location_raw": null
+            "location_raw": null,
+            "location_query": null,
+            "location_street": null,
+            "location_city": null,
+            "location_state": null
         }"#;
 
         let data: ExtractedReportData = serde_json::from_str(json).unwrap();
         assert_eq!(data.title, "Test Report");
         assert!(data.category_slug.is_none());
         assert!(data.severity.is_none());
+        assert!(data.location_query.is_none());
+        assert!(data.location_street.is_none());
+        assert!(data.location_city.is_none());
+        assert!(data.location_state.is_none());
     }
 
     #[test]
@@ -346,6 +427,13 @@ mod tests {
         assert!(schema.contains("category_slug"));
         assert!(schema.contains("severity"));
 
+        // Should contain new location fields
+        assert!(schema.contains("location_raw"));
+        assert!(schema.contains("location_query"));
+        assert!(schema.contains("location_street"));
+        assert!(schema.contains("location_city"));
+        assert!(schema.contains("location_state"));
+
         // Should NOT contain internal fields (marked with #[schemars(skip)])
         assert!(!schema.contains("is_llm_success"));
         assert!(!schema.contains("llm_error_message"));
@@ -363,5 +451,13 @@ mod tests {
         // Should contain instructions
         assert!(prompt.contains("data extraction assistant"));
         assert!(prompt.contains("JSON"));
+
+        // Should contain location extraction instructions
+        assert!(prompt.contains("Location Extraction"));
+        assert!(prompt.contains("location_query"));
+        assert!(prompt.contains("location_street"));
+        assert!(prompt.contains("location_city"));
+        assert!(prompt.contains("location_state"));
+        assert!(prompt.contains("Jawa Timur")); // Example province
     }
 }

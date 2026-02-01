@@ -150,13 +150,42 @@ impl TicketProcessor {
         tracing::info!("Created report: {} for ticket: {}", report.id, ticket.id);
 
         // Geocode location if provided
-        if let Some(location_raw) = &extracted.location_raw {
-            let geocode_result = self.geocoding_service.geocode(location_raw).await?;
-            let create_location = self.geocoding_service.to_create_location(
-                report.id,
-                location_raw.clone(),
-                geocode_result,
-            );
+        if extracted.location_raw.is_some()
+            || extracted.location_query.is_some()
+            || extracted.location_street.is_some()
+        {
+            // Use structured geocoding with extracted location fields
+            let geocode_result = self
+                .geocoding_service
+                .geocode_structured(
+                    extracted.location_query.as_deref(),
+                    extracted.location_street.as_deref(),
+                    extracted.location_city.as_deref(),
+                    extracted.location_state.as_deref(),
+                )
+                .await?;
+
+            // Fall back to raw location if structured geocoding fails
+            let geocode_result = match geocode_result {
+                Some(r) => Some(r),
+                None if extracted.location_raw.is_some() => {
+                    tracing::debug!("Structured geocoding failed, falling back to location_raw");
+                    self.geocoding_service
+                        .geocode(extracted.location_raw.as_ref().unwrap())
+                        .await?
+                }
+                None => None,
+            };
+
+            let raw_input = extracted
+                .location_raw
+                .clone()
+                .or_else(|| extracted.location_query.clone())
+                .unwrap_or_default();
+
+            let create_location =
+                self.geocoding_service
+                    .to_create_location(report.id, raw_input, geocode_result);
 
             let location = self
                 .report_service
