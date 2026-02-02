@@ -849,6 +849,49 @@ impl DashboardService {
         })
     }
 
+    pub async fn get_map_data_markers(
+        &self,
+        params: &LocationQueryParams,
+    ) -> Result<DashboardMapDataDto> {
+        // Query untuk mengambil data titik koordinat saja
+        // Kita join dengan kategori untuk mendapatkan warna visual di peta
+        let points = sqlx::query_as!(
+            MapPointDto,
+            r#"
+            SELECT 
+                r.id, 
+                rl.lat as "lat!", 
+                rl.lon as "lon!", 
+                r.status as "status: ReportStatus",
+                (
+                    SELECT c.color 
+                    FROM categories c
+                    JOIN report_categories rc ON rc.category_id = c.id
+                    WHERE rc.report_id = r.id
+                    LIMIT 1
+                ) as category_color
+            FROM reports r
+            JOIN report_locations rl ON rl.report_id = r.id
+            WHERE rl.lat IS NOT NULL 
+              AND rl.lon IS NOT NULL
+              AND r.status NOT IN ('rejected')
+              AND ($1::uuid IS NULL OR rl.province_id = $1)
+              AND ($2::uuid IS NULL OR rl.regency_id = $2)
+            LIMIT 5000
+            "#,
+            params.province_id,
+            params.regency_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch map data: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        Ok(DashboardMapDataDto { points })
+    }
+
     // ========================================================================
     // Helper functions for fetching related data
     // ========================================================================

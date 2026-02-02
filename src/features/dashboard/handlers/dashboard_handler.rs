@@ -194,3 +194,22 @@ pub async fn get_map(
     let data = service.get_map_data(&params).await?;
     Ok(Json(ApiResponse::success(Some(data), None, None)))
 }
+
+
+#[utoipa::path(
+    get,
+    path = "/api/dashboard/map-data",
+    tag = "Dashboard",
+    params(LocationQueryParams),
+    responses(
+        (status = 200, description = "Minimalist map points for distribution view", body = ApiResponse<DashboardMapDataDto>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_map_data(
+    State(service): State<Arc<DashboardService>>,
+    Query(params): Query<LocationQueryParams>,
+) -> Result<Json<ApiResponse<DashboardMapDataDto>>, AppError> {
+    let data = service.get_map_data_markers(&params).await?;
+    Ok(Json(ApiResponse::success(Some(data), None, None)))
+}
