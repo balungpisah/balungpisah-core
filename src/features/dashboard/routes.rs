@@ -19,5 +19,6 @@ pub fn routes(dashboard_service: Arc<DashboardService>) -> Router {
         // Recent and map
         .route("/api/dashboard/recent", get(handlers::get_recent))
         .route("/api/dashboard/map", get(handlers::get_map))
+        .route("/api/dashboard/map-data", get(handlers::get_map_data))
         .with_state(dashboard_service)
 }

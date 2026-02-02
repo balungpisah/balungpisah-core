@@ -381,3 +381,19 @@ pub struct DashboardSummaryDto {
     pub reports_this_week: i64,
     pub reports_this_month: i64,
 }
+
+// Query Data for map
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MapPointDto {
+    pub id: Uuid,
+    pub lat: f64,
+    pub lon: f64,
+    pub status: ReportStatus,
+    pub category_color: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DashboardMapDataDto {
+    pub points: Vec<MapPointDto>,
+}
