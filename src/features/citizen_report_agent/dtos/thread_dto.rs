@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -52,8 +53,8 @@ pub struct MessageResponseDto {
     /// Message role: "user" or "assistant"
     pub role: String,
 
-    /// Message content (text)
-    pub content: String,
+    /// Message content - can be a string or array of content blocks (text, tool_use, tool_result)
+    pub content: Value,
 
     /// TensorZero episode ID (for assistant messages)
     pub episode_id: Option<Uuid>,

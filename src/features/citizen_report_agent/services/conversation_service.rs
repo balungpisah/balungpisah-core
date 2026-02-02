@@ -133,7 +133,7 @@ impl ConversationService {
                 id: m.id,
                 thread_id: m.thread_id,
                 role: format!("{:?}", m.role).to_lowercase(),
-                content: m.content.as_string(),
+                content: serde_json::to_value(&m.content).unwrap_or_default(),
                 episode_id: m.episode_id,
                 created_at: m.created_at,
             })
