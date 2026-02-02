@@ -13,6 +13,7 @@ use crate::features::auth::services::{AuthService, TokenService};
 use crate::features::categories::{routes as categories_routes, CategoryService};
 use crate::features::citizen_report_agent::{
     create_tool_registry, routes as citizen_agent_routes, AgentRuntimeService, ConversationService,
+    ThreadAttachmentService,
 };
 use crate::features::contributors::{routes as contributors_routes, ContributorService};
 use crate::features::dashboard::{routes as dashboard_routes, DashboardService};
@@ -265,6 +266,11 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         tool_registry,
     ));
     let conversation_service = Arc::new(ConversationService::new(Arc::clone(&adk_storage)));
+    let thread_attachment_service = Arc::new(ThreadAttachmentService::new(
+        pool.clone(),
+        Arc::clone(&minio_client),
+        Arc::clone(&adk_storage),
+    ));
     tracing::info!(
         "Citizen report agent services initialized (TensorZero: {})",
         config.agent_gateway.tensorzero_url
@@ -307,6 +313,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(citizen_agent_routes::routes(
             Arc::clone(&agent_runtime_service),
             Arc::clone(&conversation_service),
+            Arc::clone(&thread_attachment_service),
         ))
         .route_layer(axum::middleware::from_fn_with_state(
             jwt_validator.clone(),

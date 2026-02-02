@@ -8,6 +8,7 @@ use axum::{
 use balungpisah_adk::{ContentBlock, MessageContent};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tracing::debug;
 use validator::Validate;
 
 use crate::core::error::{AppError, Result};
@@ -15,12 +16,13 @@ use crate::features::auth::model::AuthenticatedUser;
 use crate::shared::types::ApiResponse;
 
 use super::super::dtos::{ChatRequestDto, ChatResponseDto, ContentBlockInput, MessageContentInput};
-use super::super::services::AgentRuntimeService;
+use super::super::services::{AgentRuntimeService, ThreadAttachmentService};
 
 /// State for chat handlers
 #[derive(Clone)]
 pub struct ChatState {
     pub agent_runtime: Arc<AgentRuntimeService>,
+    pub attachment_service: Arc<ThreadAttachmentService>,
 }
 
 /// Convert MessageContentInput (DTO) to MessageContent (ADK)
@@ -68,7 +70,6 @@ fn parse_raw_sse(raw: &str) -> (Option<String>, String) {
     (event_type, data)
 }
 
-/// POST /api/citizen-report-agent/chat
 /// Send a message and receive a streaming SSE response
 #[utoipa::path(
     post,
@@ -98,6 +99,29 @@ pub async fn chat_stream(
     // Convert DTO content to ADK MessageContent
     let content = convert_content(dto.content);
 
+    // Fetch attachment context if thread_id is provided
+    let attachment_context = if let Some(tid) = dto.thread_id {
+        match state
+            .attachment_service
+            .get_attachment_context(tid, &user.account_id)
+            .await
+        {
+            Ok(ctx) => {
+                if ctx.is_some() {
+                    debug!("Injecting attachment context for thread {}", tid);
+                }
+                ctx
+            }
+            Err(e) => {
+                // Log but don't fail - attachment context is optional
+                debug!("Failed to fetch attachment context: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Start streaming chat - returns raw SSE strings from ADK
     let (_thread_id, rx) = state
         .agent_runtime
@@ -106,6 +130,7 @@ pub async fn chat_stream(
             dto.thread_id,
             dto.user_message_id,
             content,
+            attachment_context.as_deref(),
         )
         .await?;
 
@@ -132,7 +157,6 @@ pub async fn chat_stream(
     Ok(sse.into_response())
 }
 
-/// POST /api/citizen-report-agent/chat/sync
 /// Send a message and receive a synchronous response (non-streaming fallback)
 #[utoipa::path(
     post,
@@ -163,10 +187,38 @@ pub async fn chat_sync(
     // Convert DTO content to ADK MessageContent
     let content = convert_content(dto.content);
 
+    // Fetch attachment context if thread_id is provided
+    let attachment_context = if let Some(tid) = dto.thread_id {
+        match state
+            .attachment_service
+            .get_attachment_context(tid, &user.account_id)
+            .await
+        {
+            Ok(ctx) => {
+                if ctx.is_some() {
+                    debug!("Injecting attachment context for thread {}", tid);
+                }
+                ctx
+            }
+            Err(e) => {
+                // Log but don't fail - attachment context is optional
+                debug!("Failed to fetch attachment context: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Send chat message
     let (thread_id, response, episode_id) = state
         .agent_runtime
-        .chat_sync(&user.account_id, dto.thread_id, content)
+        .chat_sync(
+            &user.account_id,
+            dto.thread_id,
+            content,
+            attachment_context.as_deref(),
+        )
         .await?;
 
     let response_dto = ChatResponseDto {

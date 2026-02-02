@@ -15,7 +15,6 @@ use super::super::dtos::{
 };
 use super::super::services::ConversationService;
 
-/// GET /api/citizen-report-agent/threads
 /// List user's conversation threads
 #[utoipa::path(
     get,
@@ -44,7 +43,6 @@ pub async fn list_threads(
     )))
 }
 
-/// GET /api/citizen-report-agent/threads/{id}
 /// Get thread details
 #[utoipa::path(
     get,
@@ -73,7 +71,6 @@ pub async fn get_thread(
     Ok(Json(ApiResponse::success(Some(thread), None, None)))
 }
 
-/// GET /api/citizen-report-agent/threads/{id}/messages
 /// List messages in a thread
 #[utoipa::path(
     get,

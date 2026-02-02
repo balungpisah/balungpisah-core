@@ -130,6 +130,19 @@ impl AgentRuntimeService {
 
     /// Build an agent instance for a chat session
     fn build_agent(&self) -> Result<Agent<PostgresStorage>> {
+        self.build_agent_with_context(None)
+    }
+
+    /// Build an agent instance with optional attachment context
+    fn build_agent_with_context(
+        &self,
+        attachment_context: Option<&str>,
+    ) -> Result<Agent<PostgresStorage>> {
+        let system_prompt = match attachment_context {
+            Some(ctx) => format!("{}\n\n## User Attachments\n{}", SYSTEM_PROMPT, ctx),
+            None => SYSTEM_PROMPT.to_string(),
+        };
+
         AgentBuilder::new()
             .tensorzero_client(self.tensorzero_client.clone())
             .storage(Arc::clone(&self.storage))
@@ -137,7 +150,7 @@ impl AgentRuntimeService {
             .credentials(json!({
                 "system_api_key": self.openai_api_key
             }))
-            .system_prompt(SYSTEM_PROMPT)
+            .system_prompt(&system_prompt)
             .tools(self.tools.clone())
             .max_iterations(10)
             .build()
@@ -181,9 +194,10 @@ impl AgentRuntimeService {
         external_id: &str,
         thread_id: Option<Uuid>,
         content: MessageContent,
+        attachment_context: Option<&str>,
     ) -> Result<(Uuid, String, Uuid)> {
         let thread = self.get_or_create_thread(external_id, thread_id).await?;
-        let agent = self.build_agent()?;
+        let agent = self.build_agent_with_context(attachment_context)?;
 
         let response = agent
             .chat(thread.id, content)
@@ -218,8 +232,9 @@ impl AgentRuntimeService {
         thread_id: Option<Uuid>,
         user_message_id: Option<Uuid>,
         content: MessageContent,
+        attachment_context: Option<&str>,
     ) -> Result<(Uuid, mpsc::Receiver<String>)> {
-        let agent = self.build_agent()?;
+        let agent = self.build_agent_with_context(attachment_context)?;
 
         // Build the chat request with full lifecycle support
         let mut request = ChatRequest::new(content);
