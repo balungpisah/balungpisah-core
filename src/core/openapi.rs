@@ -10,6 +10,7 @@ use crate::features::contributors::{dtos as contributors_dtos, handlers as contr
 use crate::features::dashboard::{dtos as dashboard_dtos, handlers as dashboard_handlers};
 use crate::features::expectations::{dtos as expectations_dtos, handlers as expectations_handlers};
 use crate::features::files::{dtos as files_dtos, handlers as files_handlers};
+use crate::features::rate_limits::{dtos as rate_limits_dtos, handlers as rate_limits_handlers};
 use crate::features::regions::{dtos as regions_dtos, handlers as regions_handlers};
 use crate::features::reports::{
     dtos as reports_dtos, handlers as reports_handlers, models as reports_models,
@@ -68,6 +69,11 @@ use crate::shared::types::{ApiResponse, Meta};
         citizen_agent_handlers::attachment_handler::list_attachments,
         citizen_agent_handlers::attachment_handler::count_attachments,
         citizen_agent_handlers::attachment_handler::delete_attachment,
+        citizen_agent_handlers::rate_limit_handler::get_user_rate_limit,
+        // Rate Limits (Admin)
+        rate_limits_handlers::rate_limit_config_handler::list_rate_limit_configs,
+        rate_limits_handlers::rate_limit_config_handler::get_rate_limit_config,
+        rate_limits_handlers::rate_limit_config_handler::update_rate_limit_config,
         // Reports
         reports_handlers::report_handler::list_reports,
         reports_handlers::report_handler::get_report,
@@ -165,6 +171,13 @@ use crate::shared::types::{ApiResponse, Meta};
             ApiResponse<Vec<citizen_agent_dtos::ThreadAttachmentResponseDto>>,
             ApiResponse<citizen_agent_dtos::AttachmentCountDto>,
             ApiResponse<citizen_agent_dtos::DeleteAttachmentResponseDto>,
+            // Rate Limits
+            rate_limits_dtos::RateLimitConfigResponseDto,
+            rate_limits_dtos::UpdateRateLimitConfigDto,
+            rate_limits_dtos::UserRateLimitStatusDto,
+            ApiResponse<Vec<rate_limits_dtos::RateLimitConfigResponseDto>>,
+            ApiResponse<rate_limits_dtos::RateLimitConfigResponseDto>,
+            ApiResponse<rate_limits_dtos::UserRateLimitStatusDto>,
             // Reports
             reports_models::ReportStatus,
             reports_models::ReportSeverity,
@@ -227,6 +240,7 @@ use crate::shared::types::{ApiResponse, Meta};
         (name = "tickets", description = "Citizen report tickets"),
         (name = "reports", description = "Citizen reports and clusters"),
         (name = "Dashboard", description = "Public dashboard for viewing reports"),
+        (name = "rate-limits", description = "Rate limit configuration (admin only)"),
     ),
     modifiers(&SecurityAddon),
     info(

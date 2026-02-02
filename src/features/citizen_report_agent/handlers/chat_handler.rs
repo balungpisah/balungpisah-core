@@ -17,12 +17,14 @@ use crate::shared::types::ApiResponse;
 
 use super::super::dtos::{ChatRequestDto, ChatResponseDto, ContentBlockInput, MessageContentInput};
 use super::super::services::{AgentRuntimeService, ThreadAttachmentService};
+use crate::features::rate_limits::services::RateLimitService;
 
 /// State for chat handlers
 #[derive(Clone)]
 pub struct ChatState {
     pub agent_runtime: Arc<AgentRuntimeService>,
     pub attachment_service: Arc<ThreadAttachmentService>,
+    pub rate_limit_service: Arc<RateLimitService>,
 }
 
 /// Convert MessageContentInput (DTO) to MessageContent (ADK)
@@ -80,7 +82,8 @@ fn parse_raw_sse(raw: &str) -> (Option<String>, String) {
         (status = 400, description = "Validation error"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden - Thread belongs to another user"),
-        (status = 404, description = "Thread not found")
+        (status = 404, description = "Thread not found"),
+        (status = 429, description = "Rate limit exceeded - daily ticket limit reached")
     ),
     tag = "citizen-report-agent",
     security(
@@ -92,6 +95,18 @@ pub async fn chat_stream(
     State(state): State<ChatState>,
     Json(dto): Json<ChatRequestDto>,
 ) -> Result<Response> {
+    // Check rate limit FIRST
+    if !state
+        .rate_limit_service
+        .can_user_chat(&user.account_id)
+        .await?
+    {
+        return Err(AppError::RateLimitExceeded(
+            "You have reached your daily ticket limit. Please try again tomorrow after 00:00 WIB."
+                .to_string(),
+        ));
+    }
+
     // Validate request
     dto.validate()
         .map_err(|e| AppError::Validation(format!("Invalid request: {}", e)))?;
@@ -168,6 +183,7 @@ pub async fn chat_stream(
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden - Thread belongs to another user"),
         (status = 404, description = "Thread not found"),
+        (status = 429, description = "Rate limit exceeded - daily ticket limit reached"),
         (status = 502, description = "AI service error")
     ),
     tag = "citizen-report-agent",
@@ -180,6 +196,18 @@ pub async fn chat_sync(
     State(state): State<ChatState>,
     Json(dto): Json<ChatRequestDto>,
 ) -> Result<Json<ApiResponse<ChatResponseDto>>> {
+    // Check rate limit FIRST
+    if !state
+        .rate_limit_service
+        .can_user_chat(&user.account_id)
+        .await?
+    {
+        return Err(AppError::RateLimitExceeded(
+            "You have reached your daily ticket limit. Please try again tomorrow after 00:00 WIB."
+                .to_string(),
+        ));
+    }
+
     // Validate request
     dto.validate()
         .map_err(|e| AppError::Validation(format!("Invalid request: {}", e)))?;

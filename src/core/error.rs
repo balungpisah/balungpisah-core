@@ -39,6 +39,9 @@ pub enum AppError {
 
     #[error("External service error: {0}")]
     ExternalServiceError(String),
+
+    #[error("Rate limit exceeded: {0}")]
+    RateLimitExceeded(String),
 }
 
 impl IntoResponse for AppError {
@@ -74,6 +77,9 @@ impl IntoResponse for AppError {
             AppError::ExternalServiceError(ref msg) => {
                 tracing::error!("External service error: {}", msg);
                 (StatusCode::BAD_GATEWAY, msg.clone(), None)
+            }
+            AppError::RateLimitExceeded(ref msg) => {
+                (StatusCode::TOO_MANY_REQUESTS, msg.clone(), None)
             }
         };
 

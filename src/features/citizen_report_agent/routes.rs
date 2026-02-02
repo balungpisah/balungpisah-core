@@ -12,8 +12,10 @@ use super::handlers::{
     },
     chat_handler::{chat_stream, chat_sync, ChatState},
     conversation_handler::{get_thread, list_messages, list_threads},
+    rate_limit_handler::get_user_rate_limit,
 };
 use super::services::{AgentRuntimeService, ConversationService, ThreadAttachmentService};
+use crate::features::rate_limits::services::RateLimitService;
 
 /// Maximum body size for attachment uploads (21MB to account for multipart overhead)
 const ATTACHMENT_BODY_LIMIT: usize = 21 * 1024 * 1024;
@@ -23,10 +25,12 @@ pub fn routes(
     agent_runtime_service: Arc<AgentRuntimeService>,
     conversation_service: Arc<ConversationService>,
     attachment_service: Arc<ThreadAttachmentService>,
+    rate_limit_service: Arc<RateLimitService>,
 ) -> Router {
     let chat_state = ChatState {
         agent_runtime: agent_runtime_service,
         attachment_service: Arc::clone(&attachment_service),
+        rate_limit_service: Arc::clone(&rate_limit_service),
     };
 
     let attachment_state = AttachmentState { attachment_service };
@@ -67,8 +71,17 @@ pub fn routes(
         )
         .with_state(attachment_state);
 
+    // Rate limit status route
+    let rate_limit_routes = Router::new()
+        .route(
+            "/api/citizen-report-agent/rate-limit",
+            get(get_user_rate_limit),
+        )
+        .with_state(rate_limit_service);
+
     // Merge all routers
     chat_routes
         .merge(conversation_routes)
         .merge(attachment_routes)
+        .merge(rate_limit_routes)
 }

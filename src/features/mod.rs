@@ -6,6 +6,7 @@ pub mod dashboard;
 pub mod expectations;
 pub mod files;
 pub mod logto;
+pub mod rate_limits;
 pub mod regions;
 pub mod reports;
 pub mod tickets;

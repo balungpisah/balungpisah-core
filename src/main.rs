@@ -20,6 +20,9 @@ use crate::features::dashboard::{routes as dashboard_routes, DashboardService};
 use crate::features::expectations::{routes as expectations_routes, ExpectationService};
 use crate::features::files::{routes as files_routes, FileService};
 use crate::features::logto::token_manager::LogtoTokenManager;
+use crate::features::rate_limits::{
+    routes as rate_limits_routes, RateLimitConfigService, RateLimitService,
+};
 use crate::features::regions::{routes as regions_routes, RegionService};
 use crate::features::reports::{
     routes as reports_routes, ClusteringService, GeocodingService, RegionLookupService,
@@ -185,6 +188,14 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let dashboard_service = Arc::new(DashboardService::new(pool.clone()));
     tracing::info!("Dashboard service initialized");
 
+    // Initialize Rate Limit Services
+    let rate_limit_config_service = Arc::new(RateLimitConfigService::new(pool.clone()));
+    let rate_limit_service = Arc::new(RateLimitService::new(
+        pool.clone(),
+        Arc::clone(&rate_limit_config_service),
+    ));
+    tracing::info!("Rate limit services initialized");
+
     // Initialize Citizen Report Agent Services
     // ADK uses a separate database for conversation storage
     let tensorzero_client =
@@ -314,7 +325,11 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
             Arc::clone(&agent_runtime_service),
             Arc::clone(&conversation_service),
             Arc::clone(&thread_attachment_service),
+            Arc::clone(&rate_limit_service),
         ))
+        .merge(rate_limits_routes::admin_routes(Arc::clone(
+            &rate_limit_config_service,
+        )))
         .route_layer(axum::middleware::from_fn_with_state(
             jwt_validator.clone(),
             middleware::auth_middleware,
