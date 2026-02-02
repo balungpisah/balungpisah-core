@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT COUNT(*) as \"count!\" FROM reports WHERE status NOT IN ('draft', 'rejected')",
+  "query": "SELECT COUNT(*) as \"count!\" FROM reports WHERE status NOT IN ('rejected')",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       null
     ]
   },
-  "hash": "f0f85d5b6a6c8dc76f1abfc878a74555f87a61c0b61385e17cf4040b39219831"
+  "hash": "1e800ec61dbe8d887105f6807d5751469ce9536575ba3338594d883ee69c7a6b"
 }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(*) as \"count!\"\n                FROM reports r\n                JOIN report_locations rl ON rl.report_id = r.id\n                WHERE rl.regency_id = $1\n                  AND r.status NOT IN ('rejected')\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "227d5e7f6f4942f15f750f066fd09b2f131812e173b3b6a34b8566315f8c2fd5"
+}

@@ -79,6 +79,7 @@ use crate::shared::types::{ApiResponse, Meta};
         dashboard_handlers::dashboard_handler::get_by_tag,
         dashboard_handlers::dashboard_handler::get_recent,
         dashboard_handlers::dashboard_handler::get_map,
+        dashboard_handlers::dashboard_handler::get_map_data,
     ),
     components(
         schemas(
@@ -196,6 +197,10 @@ use crate::shared::types::{ApiResponse, Meta};
             ApiResponse<dashboard_dtos::DashboardTagOverviewDto>,
             ApiResponse<dashboard_dtos::DashboardRecentDto>,
             ApiResponse<dashboard_dtos::DashboardMapDto>,
+            // Dashboard map data (geospatial)
+            dashboard_dtos::MapPointDto,
+            dashboard_dtos::DashboardMapDataDto,
+            ApiResponse<dashboard_dtos::DashboardMapDataDto>,
         )
     ),
     tags(

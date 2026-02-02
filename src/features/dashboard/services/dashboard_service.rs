@@ -525,7 +525,7 @@ impl DashboardService {
     pub async fn get_by_tag(&self, params: &TagQueryParams) -> Result<DashboardTagOverviewDto> {
         // Get tag summary
         let tags = if let Some(tag_type) = &params.tag_type {
-            self.get_tag_summary_filtered(Some(tag_type)).await? 
+            self.get_tag_summary_filtered(Some(tag_type)).await?
         } else {
             self.get_tag_summary().await?
         };
@@ -596,7 +596,10 @@ impl DashboardService {
             .collect())
     }
 
-    async fn get_tag_summary_filtered(&self, filter_tag: Option<&ReportTagType>) -> Result<Vec<TagReportSummary>> {
+    async fn get_tag_summary_filtered(
+        &self,
+        filter_tag: Option<&ReportTagType>,
+    ) -> Result<Vec<TagReportSummary>> {
         // Convert the enum to a string if it exists
         let filter_str = filter_tag.map(|t| format!("{:?}", t).to_lowercase());
 
@@ -621,11 +624,14 @@ impl DashboardService {
         })?;
 
         // Map rows to TagReportSummary
-        Ok(rows.into_iter().map(|row| TagReportSummary {
-            tag_type: row.tag_type,
-            label: format!("{:?}", row.tag_type), 
-            report_count: row.report_count,
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|row| TagReportSummary {
+                tag_type: row.tag_type,
+                label: format!("{:?}", row.tag_type),
+                report_count: row.report_count,
+            })
+            .collect())
     }
 
     async fn get_reports_by_tag(

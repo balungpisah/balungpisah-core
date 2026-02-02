@@ -195,7 +195,6 @@ pub async fn get_map(
     Ok(Json(ApiResponse::success(Some(data), None, None)))
 }
 
-
 #[utoipa::path(
     get,
     path = "/api/dashboard/map-data",

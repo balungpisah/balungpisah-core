@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT DISTINCT\n                r.id,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.created_at\n            FROM reports r\n            JOIN report_categories rc ON rc.report_id = r.id\n            JOIN categories c ON c.id = rc.category_id\n            WHERE c.slug = $1\n              AND r.status NOT IN ('draft', 'rejected')\n            ORDER BY r.created_at DESC\n            OFFSET $2 LIMIT $3\n            ",
+  "query": "\n            SELECT\n                r.id,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.created_at\n            FROM reports r\n            JOIN report_tags rt ON rt.report_id = r.id\n            WHERE rt.tag_type::TEXT = $1::TEXT\n              AND r.status NOT IN ('rejected')\n            ORDER BY r.created_at DESC\n            OFFSET $2 LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
@@ -70,5 +70,5 @@
       false
     ]
   },
-  "hash": "187db2d74353904d0919711136652e0258d1e1b63077886401378d658664afe7"
+  "hash": "107c773affd702e604f87a928c099a19fe446150c132601b3debb4b19bd8e7c9"
 }

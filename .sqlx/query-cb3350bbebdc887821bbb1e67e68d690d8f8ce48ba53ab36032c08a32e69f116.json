@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                r.id,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.created_at\n            FROM reports r\n            WHERE r.created_at >= CURRENT_DATE - $1::int\n              AND r.status NOT IN ('draft', 'rejected')\n            ORDER BY r.created_at DESC\n            LIMIT $2\n            ",
+  "query": "\n            SELECT\n                r.id,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.created_at\n            FROM reports r\n            WHERE r.status NOT IN ('rejected')\n            ORDER BY r.created_at DESC\n            OFFSET $1 LIMIT $2\n            ",
   "describe": {
     "columns": [
       {
@@ -55,7 +55,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int4",
+        "Int8",
         "Int8"
       ]
     },
@@ -69,5 +69,5 @@
       false
     ]
   },
-  "hash": "b8f56536500bac3dc2f885e9aa2b3bbecadc26b4631583c31438cd578b784dfb"
+  "hash": "cb3350bbebdc887821bbb1e67e68d690d8f8ce48ba53ab36032c08a32e69f116"
 }

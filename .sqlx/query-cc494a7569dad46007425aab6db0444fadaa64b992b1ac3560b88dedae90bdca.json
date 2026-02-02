@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                rt.tag_type as \"tag_type: ReportTagType\",\n                COUNT(*) as \"report_count!\"\n            FROM report_tags rt\n            JOIN reports r ON r.id = rt.report_id\n            WHERE r.status NOT IN ('draft', 'rejected')\n            GROUP BY rt.tag_type\n            ORDER BY COUNT(*) DESC\n            ",
+  "query": "\n            SELECT\n                rt.tag_type as \"tag_type: ReportTagType\",\n                COUNT(*) as \"report_count!\"\n            FROM report_tags rt\n            JOIN reports r ON r.id = rt.report_id\n            WHERE r.status NOT IN ('rejected')\n            GROUP BY rt.tag_type\n            ORDER BY COUNT(*) DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -35,5 +35,5 @@
       null
     ]
   },
-  "hash": "fdd42152ba8744f43f93dc6a8b38554d9cc0a373e876210225b3bb354f7eaa3b"
+  "hash": "cc494a7569dad46007425aab6db0444fadaa64b992b1ac3560b88dedae90bdca"
 }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COUNT(DISTINCT r.id) as \"count!\"\n                FROM reports r\n                JOIN report_categories rc ON rc.report_id = r.id\n                JOIN categories c ON c.id = rc.category_id\n                WHERE c.slug = $1\n                  AND r.status NOT IN ('rejected')\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b256d4c2a383e43965caf79230196e5286720211bdae941dc1891ec083730da2"
+}
