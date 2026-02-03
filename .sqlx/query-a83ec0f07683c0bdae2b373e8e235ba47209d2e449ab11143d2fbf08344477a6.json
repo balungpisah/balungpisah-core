@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO report_attachments (report_id, file_id)\n            SELECT $1, ta.file_id\n            FROM thread_attachments ta\n            WHERE ta.thread_id = $2\n            ON CONFLICT (report_id, file_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a83ec0f07683c0bdae2b373e8e235ba47209d2e449ab11143d2fbf08344477a6"
+}

@@ -5,9 +5,9 @@ use uuid::Uuid;
 use crate::core::error::{AppError, Result};
 use crate::features::reports::dtos::UpdateReportStatusDto;
 use crate::features::reports::models::{
-    CreateReport, CreateReportCategory, CreateReportLocation, CreateReportSubmission,
-    CreateReportTag, GeocodingSource, Report, ReportCategory, ReportLocation, ReportSeverity,
-    ReportStatus, ReportTag, ReportTagType,
+    CreateReport, CreateReportAttachment, CreateReportCategory, CreateReportLocation,
+    CreateReportSubmission, CreateReportTag, GeocodingSource, Report, ReportAttachment,
+    ReportCategory, ReportLocation, ReportSeverity, ReportStatus, ReportTag, ReportTagType,
 };
 
 /// Service for report operations
@@ -673,5 +673,131 @@ impl ReportService {
         );
 
         Ok(())
+    }
+
+    // ===== Attachment Management =====
+
+    /// Link a single attachment to a report
+    pub async fn link_attachment(&self, data: &CreateReportAttachment) -> Result<ReportAttachment> {
+        let attachment = sqlx::query_as!(
+            ReportAttachment,
+            r#"
+            INSERT INTO report_attachments (report_id, file_id)
+            VALUES ($1, $2)
+            ON CONFLICT (report_id, file_id) DO NOTHING
+            RETURNING id, report_id, file_id, created_at
+            "#,
+            data.report_id,
+            data.file_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to link attachment: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        // If conflict occurred, fetch the existing attachment link
+        match attachment {
+            Some(a) => Ok(a),
+            None => sqlx::query_as!(
+                ReportAttachment,
+                r#"
+                SELECT id, report_id, file_id, created_at
+                FROM report_attachments
+                WHERE report_id = $1 AND file_id = $2
+                "#,
+                data.report_id,
+                data.file_id
+            )
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch existing attachment link: {:?}", e);
+                AppError::Database(e)
+            }),
+        }
+    }
+
+    /// Link multiple attachments to a report
+    #[allow(dead_code)]
+    pub async fn link_attachments(
+        &self,
+        report_id: Uuid,
+        file_ids: &[Uuid],
+    ) -> Result<Vec<ReportAttachment>> {
+        let mut results = Vec::with_capacity(file_ids.len());
+
+        for file_id in file_ids {
+            let data = CreateReportAttachment {
+                report_id,
+                file_id: *file_id,
+            };
+            let result = self.link_attachment(&data).await?;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Get all attachments for a report
+    #[allow(dead_code)]
+    pub async fn get_attachments(&self, report_id: Uuid) -> Result<Vec<ReportAttachment>> {
+        sqlx::query_as!(
+            ReportAttachment,
+            r#"
+            SELECT id, report_id, file_id, created_at
+            FROM report_attachments
+            WHERE report_id = $1
+            ORDER BY created_at ASC
+            "#,
+            report_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get report attachments: {:?}", e);
+            AppError::Database(e)
+        })
+    }
+
+    /// Copy attachments from thread_attachments to report_attachments
+    /// Used by ReportProcessor to link thread files to the processed report
+    pub async fn copy_attachments_from_thread(
+        &self,
+        report_id: Uuid,
+        thread_id: Uuid,
+    ) -> Result<i64> {
+        // Insert attachments from thread_attachments that don't already exist
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO report_attachments (report_id, file_id)
+            SELECT $1, ta.file_id
+            FROM thread_attachments ta
+            WHERE ta.thread_id = $2
+            ON CONFLICT (report_id, file_id) DO NOTHING
+            "#,
+            report_id,
+            thread_id
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to copy attachments from thread: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        let count = result.rows_affected() as i64;
+
+        if count > 0 {
+            tracing::info!(
+                "Copied {} attachments from thread {} to report {}",
+                count,
+                thread_id,
+                report_id
+            );
+        }
+
+        Ok(count)
     }
 }

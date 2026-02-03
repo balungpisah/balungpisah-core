@@ -256,6 +256,23 @@ impl ReportProcessor {
             }
         }
 
+        // Copy attachments from thread to report
+        if let Some(thread_id) = report.adk_thread_id {
+            let attachment_count = self
+                .report_service
+                .copy_attachments_from_thread(report.id, thread_id)
+                .await?;
+
+            if attachment_count > 0 {
+                tracing::info!(
+                    "Linked {} attachments from thread {} to report {}",
+                    attachment_count,
+                    thread_id,
+                    report.id
+                );
+            }
+        }
+
         // Mark job as completed
         self.report_job_service.mark_completed(job.id).await?;
 
