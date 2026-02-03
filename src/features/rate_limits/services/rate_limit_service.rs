@@ -49,14 +49,14 @@ impl RateLimitService {
         end
     }
 
-    /// Count tickets created by user today (in WIB timezone)
-    pub async fn count_user_tickets_today(&self, user_id: &str) -> Result<i64> {
+    /// Count reports created by user today (in WIB timezone)
+    pub async fn count_user_reports_today(&self, user_id: &str) -> Result<i64> {
         let (start_utc, end_utc) = Self::get_wib_day_bounds();
 
         let count: i64 = sqlx::query_scalar!(
             r#"
             SELECT COUNT(*) as "count!"
-            FROM tickets
+            FROM reports
             WHERE user_id = $1
               AND created_at >= $2
               AND created_at < $3
@@ -68,17 +68,17 @@ impl RateLimitService {
         .fetch_one(&self.pool)
         .await
         .map_err(|e| {
-            tracing::error!("Failed to count user tickets today: {:?}", e);
+            tracing::error!("Failed to count user reports today: {:?}", e);
             AppError::Database(e)
         })?;
 
         Ok(count)
     }
 
-    /// Check if user can chat (has not reached daily ticket limit)
+    /// Check if user can chat (has not reached daily report limit)
     pub async fn can_user_chat(&self, user_id: &str) -> Result<bool> {
         let limit = self.config_service.get_daily_ticket_limit().await?;
-        let count = self.count_user_tickets_today(user_id).await?;
+        let count = self.count_user_reports_today(user_id).await?;
 
         Ok(count < limit as i64)
     }
@@ -86,18 +86,22 @@ impl RateLimitService {
     /// Get user's rate limit status
     pub async fn get_user_status(&self, user_id: &str) -> Result<UserRateLimitStatusDto> {
         let limit = self.config_service.get_daily_ticket_limit().await?;
-        let tickets_used = self.count_user_tickets_today(user_id).await?;
-        let max_tickets = limit as i64;
-        let tickets_remaining = (max_tickets - tickets_used).max(0);
-        let can_chat = tickets_used < max_tickets;
+        let reports_used = self.count_user_reports_today(user_id).await?;
+        let max_reports = limit as i64;
+        let reports_remaining = (max_reports - reports_used).max(0);
+        let can_chat = reports_used < max_reports;
         let resets_at = Self::get_next_reset_time();
 
         Ok(UserRateLimitStatusDto {
-            tickets_used,
-            tickets_remaining,
-            max_tickets,
+            reports_used,
+            reports_remaining,
+            max_reports,
             can_chat,
             resets_at,
+            // Backward compatibility fields (same values, different names)
+            tickets_used: reports_used,
+            tickets_remaining: reports_remaining,
+            max_tickets: max_reports,
         })
     }
 }

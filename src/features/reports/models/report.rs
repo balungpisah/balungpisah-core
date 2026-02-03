@@ -61,10 +61,10 @@ impl std::fmt::Display for ReportSeverity {
 #[allow(dead_code)]
 pub struct Report {
     pub id: Uuid,
-    pub ticket_id: Uuid,
+    pub ticket_id: Option<Uuid>,
     pub cluster_id: Option<Uuid>,
-    pub title: String,
-    pub description: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
     pub timeline: Option<String>,
     pub impact: Option<String>,
     pub status: ReportStatus,
@@ -75,9 +75,14 @@ pub struct Report {
     pub resolution_notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    // New columns for direct submission workflow
+    pub reference_number: Option<String>,
+    pub adk_thread_id: Option<Uuid>,
+    pub user_id: Option<String>,
+    pub platform: Option<String>,
 }
 
-/// Data for creating a new report
+/// Data for creating a new report (from ticket processor - legacy)
 #[derive(Debug)]
 pub struct CreateReport {
     pub ticket_id: Uuid,
@@ -85,4 +90,13 @@ pub struct CreateReport {
     pub description: String,
     pub timeline: Option<String>,
     pub impact: Option<String>,
+}
+
+/// Data for creating a report submission (from agent - new workflow)
+#[derive(Debug)]
+pub struct CreateReportSubmission {
+    pub reference_number: String,
+    pub adk_thread_id: Uuid,
+    pub user_id: String,
+    pub platform: Option<String>,
 }

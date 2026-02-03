@@ -47,10 +47,12 @@ impl From<ReportTag> for ReportTagDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ReportResponseDto {
     pub id: Uuid,
-    pub ticket_id: Uuid,
+    /// Human-readable reference number for tracking
+    pub reference_number: Option<String>,
+    pub ticket_id: Option<Uuid>,
     pub cluster_id: Option<Uuid>,
-    pub title: String,
-    pub description: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
     pub timeline: Option<String>,
     pub impact: Option<String>,
     pub status: ReportStatus,
@@ -70,6 +72,7 @@ impl From<Report> for ReportResponseDto {
     fn from(r: Report) -> Self {
         Self {
             id: r.id,
+            reference_number: r.reference_number,
             ticket_id: r.ticket_id,
             cluster_id: r.cluster_id,
             title: r.title,

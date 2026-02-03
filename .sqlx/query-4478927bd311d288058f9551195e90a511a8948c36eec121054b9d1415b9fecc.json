@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                r.id,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.created_at\n            FROM reports r\n            WHERE r.status NOT IN ('pending', 'rejected')\n            ORDER BY r.created_at DESC\n            OFFSET $1 LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "status: ReportStatus",
+        "type_info": {
+          "Custom": {
+            "name": "report_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "pending",
+                "verified",
+                "in_progress",
+                "resolved",
+                "rejected"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "timeline",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "impact",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "4478927bd311d288058f9551195e90a511a8948c36eec121054b9d1415b9fecc"
+}

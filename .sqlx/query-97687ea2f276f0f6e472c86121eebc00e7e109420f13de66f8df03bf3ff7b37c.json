@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                rl.raw_input,\n                rl.display_name,\n                rl.lat,\n                rl.lon,\n                rl.city,\n                rl.state,\n                p.name as \"province_name?\",\n                rg.name as \"regency_name?\"\n            FROM report_locations rl\n            LEFT JOIN provinces p ON p.id = rl.province_id\n            LEFT JOIN regencies rg ON rg.id = rl.regency_id\n            WHERE rl.report_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "raw_input",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "lat",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "lon",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "city",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "state",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "province_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "regency_name?",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "97687ea2f276f0f6e472c86121eebc00e7e109420f13de66f8df03bf3ff7b37c"
+}

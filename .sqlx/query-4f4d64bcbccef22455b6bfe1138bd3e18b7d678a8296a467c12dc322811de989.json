@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, reference_number, adk_thread_id, user_id, platform,\n                status as \"status: TicketStatus\",\n                confidence_score, completeness_score,\n                retry_count, error_message, report_id,\n                submitted_at, processed_at, last_attempt_at,\n                created_at, updated_at\n            FROM tickets\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "reference_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "adk_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "platform",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "status: TicketStatus",
+        "type_info": {
+          "Custom": {
+            "name": "ticket_status",
+            "kind": {
+              "Enum": [
+                "submitted",
+                "processing",
+                "completed",
+                "failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "confidence_score",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "completeness_score",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "retry_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "error_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "report_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "processed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "last_attempt_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "4f4d64bcbccef22455b6bfe1138bd3e18b7d678a8296a467c12dc322811de989"
+}

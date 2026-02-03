@@ -35,14 +35,22 @@ pub struct UpdateRateLimitConfigDto {
 /// Response DTO for user's rate limit status
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct UserRateLimitStatusDto {
-    /// Number of tickets the user has created today
-    pub tickets_used: i64,
-    /// Number of tickets remaining before hitting the limit
-    pub tickets_remaining: i64,
-    /// Maximum tickets allowed per day
-    pub max_tickets: i64,
+    /// Number of reports the user has created today
+    pub reports_used: i64,
+    /// Number of reports remaining before hitting the limit
+    pub reports_remaining: i64,
+    /// Maximum reports allowed per day
+    pub max_reports: i64,
     /// Whether the user can still chat (hasn't reached the limit)
     pub can_chat: bool,
     /// When the limit resets (next 00:00 WIB in UTC)
     pub resets_at: DateTime<Utc>,
+
+    // ----- Backward compatibility fields (for FE that uses "ticket" term) -----
+    /// Alias for reports_used (backward compatibility)
+    pub tickets_used: i64,
+    /// Alias for reports_remaining (backward compatibility)
+    pub tickets_remaining: i64,
+    /// Alias for max_reports (backward compatibility)
+    pub max_tickets: i64,
 }

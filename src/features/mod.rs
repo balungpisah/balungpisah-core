@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod auth;
 pub mod categories;
 pub mod citizen_report_agent;

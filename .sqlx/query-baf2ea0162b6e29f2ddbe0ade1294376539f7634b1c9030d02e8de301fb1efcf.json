@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                rt.tag_type as \"tag_type: ReportTagType\",\n                COUNT(r.id) as \"report_count!\"\n            FROM report_tags rt\n            JOIN reports r ON r.id = rt.report_id\n            WHERE ($1::TEXT IS NULL OR rt.tag_type::TEXT = $1::TEXT)\n            AND r.status NOT IN ('pending', 'rejected')\n            GROUP BY rt.tag_type\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "tag_type: ReportTagType",
+        "type_info": {
+          "Custom": {
+            "name": "report_tag_type",
+            "kind": {
+              "Enum": [
+                "report",
+                "proposal",
+                "complaint",
+                "inquiry",
+                "appreciation"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "report_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "baf2ea0162b6e29f2ddbe0ade1294376539f7634b1c9030d02e8de301fb1efcf"
+}

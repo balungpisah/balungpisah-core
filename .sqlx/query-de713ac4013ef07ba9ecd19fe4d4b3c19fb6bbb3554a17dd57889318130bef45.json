@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, report_id, status as \"status: ReportJobStatus\",\n                confidence_score, retry_count, error_message,\n                submitted_at, processed_at, last_attempt_at, created_at\n            FROM report_jobs\n            WHERE status = 'submitted'\n            AND retry_count < $1\n            ORDER BY submitted_at ASC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "report_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status: ReportJobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "report_job_status",
+            "kind": {
+              "Enum": [
+                "submitted",
+                "processing",
+                "completed",
+                "failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "confidence_score",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "retry_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "error_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "processed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_attempt_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "de713ac4013ef07ba9ecd19fe4d4b3c19fb6bbb3554a17dd57889318130bef45"
+}

@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE report_jobs\n            SET status = $2, processed_at = NOW(), last_attempt_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "report_job_status",
+            "kind": {
+              "Enum": [
+                "submitted",
+                "processing",
+                "completed",
+                "failed"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4722a18666ea1fec66babeebaa63464b33bf59b35f9c48e5f8cb6db1ea622d0"
+}

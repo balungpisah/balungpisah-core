@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) as \"count!\"\n            FROM reports\n            WHERE created_at >= CURRENT_DATE - $1::int\n              AND status NOT IN ('pending', 'rejected')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cf2b8f788aa5ac10c1de394d78ec0f23a6c8a7a022df75402f08c04db00cfffe"
+}
