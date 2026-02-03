@@ -6,6 +6,7 @@ mod shared;
 use crate::core::config::Config;
 use crate::core::openapi::{ApiDoc, SwaggerInfoModifier};
 use crate::core::{database, middleware};
+use crate::features::admin::{routes as admin_routes, AdminService};
 use crate::features::auth;
 use crate::features::auth::clients::LogtoAuthClient;
 use crate::features::auth::routes as auth_routes;
@@ -197,6 +198,10 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     ));
     tracing::info!("Rate limit services initialized");
 
+    // Initialize Admin Service
+    let admin_service = Arc::new(AdminService::new(pool.clone()));
+    tracing::info!("Admin service initialized");
+
     // Initialize Citizen Report Agent Services
     // ADK uses a separate database for conversation storage
     let tensorzero_client =
@@ -347,6 +352,10 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(rate_limits_routes::admin_routes(Arc::clone(
             &rate_limit_config_service,
         )))
+        .nest(
+            "/api/admin",
+            admin_routes::routes(Arc::clone(&admin_service)),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             jwt_validator.clone(),
             middleware::auth_middleware,

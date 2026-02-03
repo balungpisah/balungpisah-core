@@ -1,6 +1,7 @@
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
+use crate::features::admin::{dtos as admin_dtos, handlers as admin_handlers};
 use crate::features::auth;
 use crate::features::categories::{dtos as categories_dtos, handlers as categories_handlers};
 use crate::features::citizen_report_agent::{
@@ -74,6 +75,11 @@ use crate::shared::types::{ApiResponse, Meta};
         rate_limits_handlers::rate_limit_config_handler::list_rate_limit_configs,
         rate_limits_handlers::rate_limit_config_handler::get_rate_limit_config,
         rate_limits_handlers::rate_limit_config_handler::update_rate_limit_config,
+        // Admin
+        admin_handlers::list_expectations,
+        admin_handlers::list_reports,
+        admin_handlers::list_contributors,
+        admin_handlers::list_tickets,
         // Reports
         reports_handlers::report_handler::list_reports,
         reports_handlers::report_handler::get_report,
@@ -226,6 +232,18 @@ use crate::shared::types::{ApiResponse, Meta};
             dashboard_dtos::MapPointDto,
             dashboard_dtos::DashboardMapDataDto,
             ApiResponse<dashboard_dtos::DashboardMapDataDto>,
+            // Admin
+            admin_dtos::AdminExpectationDto,
+            admin_dtos::AdminReportDto,
+            admin_dtos::AdminReportCategoryDto,
+            admin_dtos::AdminReportLocationDto,
+            admin_dtos::AdminReportAttachmentDto,
+            admin_dtos::AdminContributorDto,
+            admin_dtos::AdminTicketDto,
+            ApiResponse<Vec<admin_dtos::AdminExpectationDto>>,
+            ApiResponse<Vec<admin_dtos::AdminReportDto>>,
+            ApiResponse<Vec<admin_dtos::AdminContributorDto>>,
+            ApiResponse<Vec<admin_dtos::AdminTicketDto>>,
         )
     ),
     tags(
@@ -241,6 +259,7 @@ use crate::shared::types::{ApiResponse, Meta};
         (name = "reports", description = "Citizen reports and clusters"),
         (name = "Dashboard", description = "Public dashboard for viewing reports"),
         (name = "rate-limits", description = "Rate limit configuration (admin only)"),
+        (name = "admin", description = "Admin endpoints (super admin only)"),
     ),
     modifiers(&SecurityAddon),
     info(
