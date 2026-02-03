@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT COUNT(*) as \"count!\"\n                FROM reports r\n                JOIN report_tags rt ON rt.report_id = r.id\n                WHERE rt.tag_type = $1\n                  AND r.status NOT IN ('rejected')\n                ",
+  "query": "\n                SELECT COUNT(*) as \"count!\"\n                FROM reports r\n                JOIN report_tags rt ON rt.report_id = r.id\n                WHERE rt.tag_type = $1\n                  AND r.status NOT IN ('pending', 'rejected')\n                ",
   "describe": {
     "columns": [
       {
@@ -31,5 +31,5 @@
       null
     ]
   },
-  "hash": "498f399454a7c30949a693a340e6f71da0f1e86bf55fb032581bef7029b659ea"
+  "hash": "835f4a8b6cb6fc98959594ee3f033bac34e023179fd1ff04d8fbdcfd1fc66f3c"
 }

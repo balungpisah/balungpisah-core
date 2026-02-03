@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at,\n                reference_number, adk_thread_id, user_id, platform\n            FROM reports\n            WHERE user_id = $1\n            ORDER BY created_at DESC\n            ",
+  "query": "\n            SELECT\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at,\n                reference_number, adk_thread_id, user_id, platform\n            FROM reports\n            WHERE user_id = $1\n              AND status NOT IN ('pending', 'rejected')\n            ORDER BY created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -140,5 +140,5 @@
       true
     ]
   },
-  "hash": "96b333eea35f8c78e2d1abe6a7a3115202238c4c302a93a50dd8dfafa45c409f"
+  "hash": "473658764a4c0a141e60983df91780c847686e713740c9dbd4a7eb661068ae27"
 }

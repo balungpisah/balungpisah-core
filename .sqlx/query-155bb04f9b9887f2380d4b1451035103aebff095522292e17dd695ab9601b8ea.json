@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                r.id,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.created_at\n            FROM reports r\n            WHERE r.created_at >= CURRENT_DATE - $1::int\n              AND r.status NOT IN ('rejected')\n            ORDER BY r.created_at DESC\n            LIMIT $2\n            ",
+  "query": "\n            SELECT\n                r.id,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.created_at\n            FROM reports r\n            JOIN report_tags rt ON rt.report_id = r.id\n            WHERE rt.tag_type::TEXT = $1::TEXT\n              AND r.status NOT IN ('pending', 'rejected')\n            ORDER BY r.created_at DESC\n            OFFSET $2 LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
@@ -55,7 +55,8 @@
     ],
     "parameters": {
       "Left": [
-        "Int4",
+        "Text",
+        "Int8",
         "Int8"
       ]
     },
@@ -69,5 +70,5 @@
       false
     ]
   },
-  "hash": "0618d0876ab267439bd07ca59c064287ee089d04c6207472b6f57d5bc8106e7e"
+  "hash": "155bb04f9b9887f2380d4b1451035103aebff095522292e17dd695ab9601b8ea"
 }

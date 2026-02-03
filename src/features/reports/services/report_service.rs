@@ -327,6 +327,7 @@ impl ReportService {
     }
 
     /// List reports by user (new workflow - query reports.user_id directly)
+    /// Excludes pending (still processing) and rejected reports
     pub async fn list_by_user(&self, user_id: &str) -> Result<Vec<Report>> {
         sqlx::query_as!(
             Report,
@@ -340,6 +341,7 @@ impl ReportService {
                 reference_number, adk_thread_id, user_id, platform
             FROM reports
             WHERE user_id = $1
+              AND status NOT IN ('pending', 'rejected')
             ORDER BY created_at DESC
             "#,
             user_id

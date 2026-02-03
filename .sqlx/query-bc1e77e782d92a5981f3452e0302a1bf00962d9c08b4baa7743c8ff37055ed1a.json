@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                COUNT(*) as \"total_reports!\",\n                COUNT(*) FILTER (WHERE status = 'pending') as \"pending_count!\",\n                COUNT(*) FILTER (WHERE status = 'resolved') as \"resolved_count!\",\n                COUNT(*) FILTER (WHERE created_at >= date_trunc('week', CURRENT_DATE)) as \"reports_this_week!\",\n                COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE)) as \"reports_this_month!\"\n            FROM reports\n            WHERE status NOT IN ('rejected')\n            ",
+  "query": "\n            SELECT\n                COUNT(*) as \"total_reports!\",\n                COUNT(*) FILTER (WHERE status = 'pending') as \"pending_count!\",\n                COUNT(*) FILTER (WHERE status = 'resolved') as \"resolved_count!\",\n                COUNT(*) FILTER (WHERE created_at >= date_trunc('week', CURRENT_DATE)) as \"reports_this_week!\",\n                COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE)) as \"reports_this_month!\"\n            FROM reports\n            WHERE status NOT IN ('pending', 'rejected')\n            ",
   "describe": {
     "columns": [
       {
@@ -40,5 +40,5 @@
       null
     ]
   },
-  "hash": "9e17ab288f1ea03c9e462abeeb52cb877f0b83df0905e03a42a32367bfffffdb"
+  "hash": "bc1e77e782d92a5981f3452e0302a1bf00962d9c08b4baa7743c8ff37055ed1a"
 }

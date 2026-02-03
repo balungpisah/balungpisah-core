@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                rg.id,\n                rg.province_id,\n                rg.name,\n                rg.code,\n                rg.lat,\n                rg.lng,\n                COUNT(rl.id) as \"report_count!\"\n            FROM regencies rg\n            LEFT JOIN report_locations rl ON rl.regency_id = rg.id\n            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('rejected')\n            WHERE rg.province_id = $1\n            GROUP BY rg.id, rg.province_id, rg.name, rg.code, rg.lat, rg.lng\n            HAVING COUNT(rl.id) > 0\n            ORDER BY COUNT(rl.id) DESC, rg.name ASC\n            ",
+  "query": "\n            SELECT\n                rg.id,\n                rg.province_id,\n                rg.name,\n                rg.code,\n                rg.lat,\n                rg.lng,\n                COUNT(rl.id) as \"report_count!\"\n            FROM regencies rg\n            LEFT JOIN report_locations rl ON rl.regency_id = rg.id\n            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('pending', 'rejected')\n            WHERE rg.province_id = $1\n            GROUP BY rg.id, rg.province_id, rg.name, rg.code, rg.lat, rg.lng\n            HAVING COUNT(rl.id) > 0\n            ORDER BY COUNT(rl.id) DESC, rg.name ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -54,5 +54,5 @@
       null
     ]
   },
-  "hash": "e841269204813df562bd8bf283a000a724c3fb83001454ce5bb0fd92c9cab531"
+  "hash": "1c1fb9882be6684215f063b49b6a05bbf5be0a06c08d0aa72af119dc02725efc"
 }

@@ -30,7 +30,7 @@ impl DashboardService {
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('week', CURRENT_DATE)) as "reports_this_week!",
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE)) as "reports_this_month!"
             FROM reports
-            WHERE status NOT IN ('rejected')
+            WHERE status NOT IN ('pending', 'rejected')
             "#
         )
         .fetch_one(&self.pool)
@@ -64,7 +64,7 @@ impl DashboardService {
 
         // Get total count
         let total = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) as "count!" FROM reports WHERE status NOT IN ('rejected')"#
+            r#"SELECT COUNT(*) as "count!" FROM reports WHERE status NOT IN ('pending', 'rejected')"#
         )
         .fetch_one(&self.pool)
         .await
@@ -85,7 +85,7 @@ impl DashboardService {
                 r.impact,
                 r.created_at
             FROM reports r
-            WHERE r.status NOT IN ('rejected')
+            WHERE r.status NOT IN ('pending', 'rejected')
             ORDER BY r.created_at DESC
             OFFSET $1 LIMIT $2
             "#,
@@ -207,7 +207,7 @@ impl DashboardService {
                 FROM reports r
                 JOIN report_locations rl ON rl.report_id = r.id
                 WHERE rl.regency_id = $1
-                  AND r.status NOT IN ('rejected')
+                  AND r.status NOT IN ('pending', 'rejected')
                 "#,
                 regency_id
             )
@@ -247,7 +247,7 @@ impl DashboardService {
                 COUNT(rl.id) as "report_count!"
             FROM provinces p
             LEFT JOIN report_locations rl ON rl.province_id = p.id
-            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('rejected')
+            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('pending', 'rejected')
             GROUP BY p.id, p.name, p.code, p.lat, p.lng
             HAVING COUNT(rl.id) > 0
             ORDER BY COUNT(rl.id) DESC, p.name ASC
@@ -286,7 +286,7 @@ impl DashboardService {
                 COUNT(rl.id) as "report_count!"
             FROM regencies rg
             LEFT JOIN report_locations rl ON rl.regency_id = rg.id
-            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('rejected')
+            LEFT JOIN reports r ON r.id = rl.report_id AND r.status NOT IN ('pending', 'rejected')
             WHERE rg.province_id = $1
             GROUP BY rg.id, rg.province_id, rg.name, rg.code, rg.lat, rg.lng
             HAVING COUNT(rl.id) > 0
@@ -334,7 +334,7 @@ impl DashboardService {
             FROM reports r
             JOIN report_locations rl ON rl.report_id = r.id
             WHERE rl.regency_id = $1
-              AND r.status NOT IN ('rejected')
+              AND r.status NOT IN ('pending', 'rejected')
             ORDER BY r.created_at DESC
             OFFSET $2 LIMIT $3
             "#,
@@ -396,7 +396,7 @@ impl DashboardService {
                 JOIN report_categories rc ON rc.report_id = r.id
                 JOIN categories c ON c.id = rc.category_id
                 WHERE c.slug = $1
-                  AND r.status NOT IN ('rejected')
+                  AND r.status NOT IN ('pending', 'rejected')
                 "#,
                 slug
             )
@@ -434,7 +434,7 @@ impl DashboardService {
                 COUNT(DISTINCT rc.report_id) as "report_count!"
             FROM categories c
             LEFT JOIN report_categories rc ON rc.category_id = c.id
-            LEFT JOIN reports r ON r.id = rc.report_id AND r.status NOT IN ('rejected')
+            LEFT JOIN reports r ON r.id = rc.report_id AND r.status NOT IN ('pending', 'rejected')
             WHERE c.is_active = true
             GROUP BY c.id, c.name, c.slug, c.description, c.color, c.icon, c.display_order
             ORDER BY COUNT(DISTINCT rc.report_id) DESC, c.display_order ASC
@@ -481,7 +481,7 @@ impl DashboardService {
             JOIN report_categories rc ON rc.report_id = r.id
             JOIN categories c ON c.id = rc.category_id
             WHERE c.slug = $1
-              AND r.status NOT IN ('rejected')
+              AND r.status NOT IN ('pending', 'rejected')
             ORDER BY r.created_at DESC
             OFFSET $2 LIMIT $3
             "#,
@@ -543,7 +543,7 @@ impl DashboardService {
                 FROM reports r
                 JOIN report_tags rt ON rt.report_id = r.id
                 WHERE rt.tag_type = $1
-                  AND r.status NOT IN ('rejected')
+                  AND r.status NOT IN ('pending', 'rejected')
                 "#,
                 tag_type as &ReportTagType
             )
@@ -576,7 +576,7 @@ impl DashboardService {
                 COUNT(*) as "report_count!"
             FROM report_tags rt
             JOIN reports r ON r.id = rt.report_id
-            WHERE r.status NOT IN ('rejected')
+            WHERE r.status NOT IN ('pending', 'rejected')
             GROUP BY rt.tag_type
             ORDER BY COUNT(*) DESC
             "#
@@ -613,7 +613,7 @@ impl DashboardService {
             FROM report_tags rt
             JOIN reports r ON r.id = rt.report_id
             WHERE ($1::TEXT IS NULL OR rt.tag_type::TEXT = $1::TEXT)
-            AND r.status NOT IN ('rejected')
+            AND r.status NOT IN ('pending', 'rejected')
             GROUP BY rt.tag_type
             "#,
             filter_str // This is $1
@@ -655,7 +655,7 @@ impl DashboardService {
             FROM reports r
             JOIN report_tags rt ON rt.report_id = r.id
             WHERE rt.tag_type::TEXT = $1::TEXT
-              AND r.status NOT IN ('rejected')
+              AND r.status NOT IN ('pending', 'rejected')
             ORDER BY r.created_at DESC
             OFFSET $2 LIMIT $3
             "#,
@@ -707,7 +707,7 @@ impl DashboardService {
             SELECT COUNT(*) as "count!"
             FROM reports
             WHERE created_at >= CURRENT_DATE - $1::int
-              AND status NOT IN ('rejected')
+              AND status NOT IN ('pending', 'rejected')
             "#,
             days
         )
@@ -730,7 +730,7 @@ impl DashboardService {
                 r.created_at
             FROM reports r
             WHERE r.created_at >= CURRENT_DATE - $1::int
-              AND r.status NOT IN ('rejected')
+              AND r.status NOT IN ('pending', 'rejected')
             ORDER BY r.created_at DESC
             LIMIT $2
             "#,
@@ -796,7 +796,7 @@ impl DashboardService {
             LEFT JOIN categories c ON c.id = rc.category_id
             WHERE rl.lat IS NOT NULL
               AND rl.lon IS NOT NULL
-              AND r.status NOT IN ('rejected')
+              AND r.status NOT IN ('pending', 'rejected')
               AND ($1::uuid IS NULL OR rl.province_id = $1)
               AND ($2::uuid IS NULL OR rl.regency_id = $2)
               AND ($3::text IS NULL OR c.slug = $3)
@@ -882,7 +882,7 @@ impl DashboardService {
             JOIN report_locations rl ON rl.report_id = r.id
             WHERE rl.lat IS NOT NULL 
               AND rl.lon IS NOT NULL
-              AND r.status NOT IN ('rejected')
+              AND r.status NOT IN ('pending', 'rejected')
               AND ($1::uuid IS NULL OR rl.province_id = $1)
               AND ($2::uuid IS NULL OR rl.regency_id = $2)
             LIMIT 5000

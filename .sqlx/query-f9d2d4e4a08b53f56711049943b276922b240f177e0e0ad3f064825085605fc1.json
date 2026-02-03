@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                rt.tag_type as \"tag_type: ReportTagType\",\n                COUNT(r.id) as \"report_count!\"\n            FROM report_tags rt\n            JOIN reports r ON r.id = rt.report_id\n            WHERE ($1::TEXT IS NULL OR rt.tag_type::TEXT = $1::TEXT)\n            AND r.status NOT IN ('rejected')\n            GROUP BY rt.tag_type\n            ",
+  "query": "\n            SELECT\n                rt.tag_type as \"tag_type: ReportTagType\",\n                COUNT(*) as \"report_count!\"\n            FROM report_tags rt\n            JOIN reports r ON r.id = rt.report_id\n            WHERE r.status NOT IN ('pending', 'rejected')\n            GROUP BY rt.tag_type\n            ORDER BY COUNT(*) DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -28,14 +28,12 @@
       }
     ],
     "parameters": {
-      "Left": [
-        "Text"
-      ]
+      "Left": []
     },
     "nullable": [
       false,
       null
     ]
   },
-  "hash": "b0f72418aadb6ce3a402acf0fb15eca3260086ad53f0e1c0a7f204c5079e211a"
+  "hash": "f9d2d4e4a08b53f56711049943b276922b240f177e0e0ad3f064825085605fc1"
 }
