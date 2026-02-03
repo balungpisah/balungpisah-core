@@ -18,5 +18,8 @@ COPY target/x86_64-unknown-linux-gnu/release/balungpisah-core .
 # Copy migrations (needed for runtime migration execution)
 COPY migrations ./migrations
 
+# Copy prompt templates (needed for AI agents at runtime)
+COPY templates ./templates
+
 # Default: run the API server (can be overridden in docker-compose)
 CMD ["./balungpisah-core"]
