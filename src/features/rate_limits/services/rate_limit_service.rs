@@ -98,6 +98,10 @@ impl RateLimitService {
             max_reports,
             can_chat,
             resets_at,
+            // Backward compatibility fields (same values, different names)
+            tickets_used: reports_used,
+            tickets_remaining: reports_remaining,
+            max_tickets: max_reports,
         })
     }
 }

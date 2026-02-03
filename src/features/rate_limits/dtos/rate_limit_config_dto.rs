@@ -45,4 +45,12 @@ pub struct UserRateLimitStatusDto {
     pub can_chat: bool,
     /// When the limit resets (next 00:00 WIB in UTC)
     pub resets_at: DateTime<Utc>,
+
+    // ----- Backward compatibility fields (for FE that uses "ticket" term) -----
+    /// Alias for reports_used (backward compatibility)
+    pub tickets_used: i64,
+    /// Alias for reports_remaining (backward compatibility)
+    pub tickets_remaining: i64,
+    /// Alias for max_reports (backward compatibility)
+    pub max_tickets: i64,
 }
