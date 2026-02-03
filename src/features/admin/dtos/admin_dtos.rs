@@ -144,20 +144,24 @@ impl ReportQueryParams {
     }
 }
 
-/// Admin view of report (list)
+/// Admin view of report (list) - optimized with summary fields
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct AdminReportDto {
     pub id: Uuid,
     pub reference_number: Option<String>,
     pub title: Option<String>,
-    pub description: Option<String>,
     pub status: ReportStatus,
     pub user_id: Option<String>,
     pub platform: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub categories: Vec<AdminReportCategoryDto>,
-    pub location: Option<AdminReportLocationDto>,
+    /// Number of categories assigned to this report
+    pub category_count: i64,
+    /// Primary category name (first assigned category)
+    pub primary_category: Option<String>,
+    /// Location summary (city or regency name)
+    pub location_summary: Option<String>,
+    /// Number of attachments
     pub attachment_count: i64,
 }
 

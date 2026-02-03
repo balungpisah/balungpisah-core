@@ -157,7 +157,7 @@ impl AdminService {
     // REPORTS
     // =========================================================================
 
-    /// List reports with pagination and filters
+    /// List reports with pagination and filters (optimized single query)
     pub async fn list_reports(
         &self,
         params: &ReportQueryParams,
@@ -173,18 +173,18 @@ impl AdminService {
 
         if let Some(ref status) = params.status {
             args.push(status.to_string());
-            conditions.push(format!("status = ${}::report_status", args.len()));
+            conditions.push(format!("r.status = ${}::report_status", args.len()));
         }
 
         if let Some(from_date) = params.from_date {
             args.push(from_date.to_string());
-            conditions.push(format!("created_at >= ${}::date", args.len()));
+            conditions.push(format!("r.created_at >= ${}::date", args.len()));
         }
 
         if let Some(to_date) = params.to_date {
             args.push(to_date.to_string());
             conditions.push(format!(
-                "created_at < (${}::date + interval '1 day')",
+                "r.created_at < (${}::date + interval '1 day')",
                 args.len()
             ));
         }
@@ -192,30 +192,29 @@ impl AdminService {
         if let Some(ref search) = params.search {
             args.push(format!("%{}%", search.to_lowercase()));
             conditions.push(format!(
-                "(LOWER(reference_number) LIKE ${0} OR LOWER(title) LIKE ${0})",
+                "(LOWER(r.reference_number) LIKE ${0} OR LOWER(r.title) LIKE ${0})",
                 args.len()
             ));
         }
 
         if let Some(ref user_id) = params.user_id {
             args.push(user_id.clone());
-            conditions.push(format!("user_id = ${}", args.len()));
+            conditions.push(format!("r.user_id = ${}", args.len()));
         }
 
         if let Some(ref platform) = params.platform {
             args.push(platform.clone());
-            conditions.push(format!("platform = ${}", args.len()));
+            conditions.push(format!("r.platform = ${}", args.len()));
         }
 
         if let Some(has_attachments) = params.has_attachments {
             if has_attachments {
                 conditions.push(
-                    "EXISTS (SELECT 1 FROM report_attachments WHERE report_id = reports.id)"
-                        .to_string(),
+                    "EXISTS (SELECT 1 FROM report_attachments WHERE report_id = r.id)".to_string(),
                 );
             } else {
                 conditions.push(
-                    "NOT EXISTS (SELECT 1 FROM report_attachments WHERE report_id = reports.id)"
+                    "NOT EXISTS (SELECT 1 FROM report_attachments WHERE report_id = r.id)"
                         .to_string(),
                 );
             }
@@ -228,59 +227,86 @@ impl AdminService {
         };
 
         // Get total count
-        let count_query = format!(r#"SELECT COUNT(*) FROM reports {}"#, where_clause);
+        let count_query = format!(r#"SELECT COUNT(*) FROM reports r {}"#, where_clause);
         let total: i64 = self.execute_count_query(&count_query, &args).await?;
 
-        // Get paginated data with dynamic ORDER BY
+        // Optimized single query with LEFT JOINs and subqueries for aggregated data
         let data_query = format!(
             r#"
             SELECT
-                id, reference_number, title, description,
-                status, user_id, platform, created_at, updated_at
-            FROM reports
+                r.id,
+                r.reference_number,
+                r.title,
+                r.status,
+                r.user_id,
+                r.platform,
+                r.created_at,
+                r.updated_at,
+                COALESCE(cat_agg.category_count, 0) as category_count,
+                cat_agg.primary_category,
+                COALESCE(rl.city, rg.name, rl.display_name) as location_summary,
+                COALESCE(att_agg.attachment_count, 0) as attachment_count
+            FROM reports r
+            LEFT JOIN report_locations rl ON rl.report_id = r.id
+            LEFT JOIN regencies rg ON rg.id = rl.regency_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COUNT(*) as category_count,
+                    (SELECT c.name FROM report_categories rc2
+                     JOIN categories c ON c.id = rc2.category_id
+                     WHERE rc2.report_id = r.id
+                     ORDER BY c.name LIMIT 1) as primary_category
+                FROM report_categories rc
+                WHERE rc.report_id = r.id
+            ) cat_agg ON true
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) as attachment_count
+                FROM report_attachments ra
+                WHERE ra.report_id = r.id
+            ) att_agg ON true
             {}
-            ORDER BY {} {}
+            ORDER BY r.{} {}
             OFFSET {} LIMIT {}
             "#,
             where_clause, sort_by, sort_dir, offset, limit
         );
 
-        let rows = self.execute_reports_query(&data_query, &args).await?;
-
-        let mut items = Vec::with_capacity(rows.len());
-        for row in rows {
-            let categories = self.get_report_categories(row.id).await?;
-            let location = self.get_report_location(row.id).await?;
-            let attachment_count = self.get_report_attachment_count(row.id).await?;
-
-            items.push(AdminReportDto {
-                id: row.id,
-                reference_number: row.reference_number,
-                title: row.title,
-                description: row.description,
-                status: row.status,
-                user_id: row.user_id,
-                platform: row.platform,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                categories,
-                location,
-                attachment_count,
-            });
-        }
+        let items = self.execute_reports_list_query(&data_query, &args).await?;
 
         Ok((items, total))
     }
 
-    async fn execute_reports_query(&self, query: &str, args: &[String]) -> Result<Vec<ReportRow>> {
-        let mut sqlx_query = sqlx::query_as::<_, ReportRow>(query);
+    async fn execute_reports_list_query(
+        &self,
+        query: &str,
+        args: &[String],
+    ) -> Result<Vec<AdminReportDto>> {
+        let mut sqlx_query = sqlx::query_as::<_, ReportListRow>(query);
         for arg in args {
             sqlx_query = sqlx_query.bind(arg);
         }
-        sqlx_query.fetch_all(&self.pool).await.map_err(|e| {
-            tracing::error!("Failed to execute reports query: {:?}", e);
+        let rows = sqlx_query.fetch_all(&self.pool).await.map_err(|e| {
+            tracing::error!("Failed to execute reports list query: {:?}", e);
             AppError::Database(e)
-        })
+        })?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| AdminReportDto {
+                id: r.id,
+                reference_number: r.reference_number,
+                title: r.title,
+                status: r.status,
+                user_id: r.user_id,
+                platform: r.platform,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+                category_count: r.category_count,
+                primary_category: r.primary_category,
+                location_summary: r.location_summary,
+                attachment_count: r.attachment_count,
+            })
+            .collect())
     }
 
     /// Get a single report by ID with full details
@@ -471,20 +497,6 @@ impl AdminService {
                 url: r.url,
             })
             .collect())
-    }
-
-    /// Get attachment count for a report
-    async fn get_report_attachment_count(&self, report_id: Uuid) -> Result<i64> {
-        sqlx::query_scalar!(
-            r#"SELECT COUNT(*) as "count!" FROM report_attachments WHERE report_id = $1"#,
-            report_id
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to count report attachments: {:?}", e);
-            AppError::Database(e)
-        })
     }
 
     // =========================================================================
@@ -826,17 +838,21 @@ struct ExpectationRow {
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
+/// Optimized row for reports list with aggregated data
 #[derive(sqlx::FromRow)]
-struct ReportRow {
+struct ReportListRow {
     id: Uuid,
     reference_number: Option<String>,
     title: Option<String>,
-    description: Option<String>,
     status: ReportStatus,
     user_id: Option<String>,
     platform: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    category_count: i64,
+    primary_category: Option<String>,
+    location_summary: Option<String>,
+    attachment_count: i64,
 }
 
 #[derive(sqlx::FromRow)]
