@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::core::error::{AppError, Result};
 use crate::features::reports::models::{ReportSeverity, ReportTagType};
 use crate::shared::llm::{parse_with_fallback, LlmResponse};
+use crate::shared::prompts::render_extraction_prompt;
 
 fn default_true() -> bool {
     true
@@ -228,7 +229,7 @@ impl ExtractionService {
         // Fetch categories from database for dynamic prompt
         let categories = self.fetch_active_categories().await?;
 
-        let system_prompt = Self::build_system_prompt(&categories);
+        let system_prompt = Self::build_system_prompt(&categories)?;
         let user_prompt = Self::build_user_prompt(conversation);
 
         // Build inference request with schema in system prompt (avoiding output_schema bug)
@@ -272,7 +273,7 @@ impl ExtractionService {
         Ok(extracted)
     }
 
-    fn build_system_prompt(categories: &[CategoryInfo]) -> String {
+    fn build_system_prompt(categories: &[CategoryInfo]) -> Result<String> {
         // Build dynamic category list from database
         let category_list = if categories.is_empty() {
             // Fallback to default categories if database is empty
@@ -292,111 +293,10 @@ impl ExtractionService {
                 .join("\n")
         };
 
-        format!(
-            r#"You are a data extraction assistant for a citizen report system in Indonesia. Your task is to extract structured information from conversations between citizens and an AI assistant about issues they want to report.
+        let json_schema = ExtractedReportData::json_schema_string();
 
-## Core Information to Extract
-
-### Title and Description
-- **title**: A concise, descriptive title for the report (max 200 characters). Should summarize the main issue.
-- **description**: A detailed description of the issue, including all relevant context mentioned in the conversation.
-
-### Categories (Multi-Category Support)
-Reports can belong to multiple categories. Extract as an array of objects with slug and severity.
-
-**Available Category Slugs:**
-{category_list}
-
-**Severity Levels:**
-- `low` - Minor inconvenience, no immediate danger
-- `medium` - Noticeable problem affecting daily life
-- `high` - Serious issue requiring prompt attention
-- `critical` - Emergency or dangerous situation requiring immediate action
-
-**Multi-Category Examples:**
-- Pothole causing accidents: [{{"slug": "infrastructure", "severity": "high"}}, {{"slug": "public-safety", "severity": "medium"}}]
-- Garbage pile attracting pests: [{{"slug": "environment", "severity": "medium"}}, {{"slug": "public-safety", "severity": "low"}}]
-- Broken street light in dark alley: [{{"slug": "infrastructure", "severity": "medium"}}, {{"slug": "public-safety", "severity": "high"}}]
-- Flooding damaging homes: [{{"slug": "environment", "severity": "critical"}}, {{"slug": "infrastructure", "severity": "high"}}]
-
-### Report Type (Tag)
-Classify the intent of the submission:
-- `report` - General observation or reporting of an issue
-- `complaint` - Expression of dissatisfaction about a problem
-- `proposal` - Suggestion for improvement or new initiative
-- `inquiry` - Question or request for information
-- `appreciation` - Positive feedback, thanks, or compliment
-
-### Timeline and Impact
-- **timeline**: When the issue started or occurred (e.g., "2 weeks ago", "since last month", "happened yesterday")
-- **impact**: Who or how many are affected (e.g., "affects all residents in the area", "dangerous for children", "hundreds of people daily")
-
-## Location Extraction (CRITICAL FOR GEOCODING)
-
-Extract location into structured fields for accurate geocoding:
-
-- **location_raw**: The exact, unmodified location description as mentioned by the user
-- **location_query**: A structured query for geocoding combining street name with nearby landmark and city (e.g., "Jalan Tunjungan dekat Tugu Pahlawan, Surabaya")
-- **location_street**: Just the street or road name. Look for prefixes: "Jl.", "Jalan", "Gang", "Gg.", "Lorong"
-- **location_city**: City or regency name. Remove prefixes "Kota" or "Kabupaten" (e.g., "Kota Surabaya" → "Surabaya")
-- **location_state**: Province name. If not explicitly mentioned, infer from the city using this knowledge:
-  - Surabaya, Sidoarjo, Malang, Gresik, Jember → Jawa Timur
-  - Jakarta, Jakarta Selatan, Jakarta Utara → DKI Jakarta
-  - Bandung, Bekasi, Bogor, Depok → Jawa Barat
-  - Semarang, Solo, Yogyakarta → Jawa Tengah
-  - Medan → Sumatera Utara
-  - Makassar → Sulawesi Selatan
-  - Denpasar → Bali
-
-**Location Examples:**
-
-Example 1:
-- User mentions: "di depan warung Bu Sri, Jalan Tunjungan, Surabaya"
-- Extract:
-  - location_raw: "di depan warung Bu Sri, Jalan Tunjungan, Surabaya"
-  - location_query: "Jalan Tunjungan dekat warung Bu Sri, Surabaya"
-  - location_street: "Jalan Tunjungan"
-  - location_city: "Surabaya"
-  - location_state: "Jawa Timur"
-
-Example 2:
-- User mentions: "Gang Sempit RT 5 RW 3, Kelurahan Wonokromo"
-- Extract:
-  - location_raw: "Gang Sempit RT 5 RW 3, Kelurahan Wonokromo"
-  - location_query: "Gang Sempit, Wonokromo, Surabaya"
-  - location_street: "Gang Sempit"
-  - location_city: "Surabaya" (inferred from Wonokromo being in Surabaya)
-  - location_state: "Jawa Timur"
-
-Example 3:
-- User mentions: "dekat Stasiun Gambir, Jakarta Pusat"
-- Extract:
-  - location_raw: "dekat Stasiun Gambir, Jakarta Pusat"
-  - location_query: "Stasiun Gambir, Jakarta Pusat"
-  - location_street: null
-  - location_city: "Jakarta Pusat"
-  - location_state: "DKI Jakarta"
-
-## Important Guidelines
-
-1. **Be accurate**: Only extract information explicitly mentioned or clearly inferable from the conversation
-2. **Preserve context**: The description should be comprehensive, capturing all relevant details
-3. **Multi-category when appropriate**: Many issues affect multiple areas - don't hesitate to assign multiple categories
-4. **Use valid category slugs**: Only use slugs from the available categories list above
-5. **Infer provinces**: Use your knowledge of Indonesian geography to infer provinces from cities
-6. **Null for unknown**: If information is not provided or cannot be reliably inferred, set it to null
-7. **Location priority**: Street + City + Province is ideal; at minimum try to get City
-
-## Output Format
-
-You MUST respond with valid JSON that conforms to this schema:
-```json
-{}
-```
-
-Respond ONLY with the JSON object, no additional text, explanation, or markdown formatting."#,
-            ExtractedReportData::json_schema_string()
-        )
+        render_extraction_prompt(&category_list, &json_schema)
+            .map_err(|e| AppError::Internal(format!("Failed to render extraction prompt: {}", e)))
     }
 
     fn build_user_prompt(conversation: &str) -> String {
@@ -584,7 +484,7 @@ mod tests {
     #[test]
     fn test_build_system_prompt_contains_schema() {
         // Test with empty categories (uses fallback)
-        let prompt = ExtractionService::build_system_prompt(&[]);
+        let prompt = ExtractionService::build_system_prompt(&[]).unwrap();
 
         // Should contain the schema
         assert!(prompt.contains("title"));
@@ -630,7 +530,7 @@ mod tests {
             },
         ];
 
-        let prompt = ExtractionService::build_system_prompt(&categories);
+        let prompt = ExtractionService::build_system_prompt(&categories).unwrap();
 
         // Should contain the dynamic categories in the Available Category Slugs section
         assert!(prompt.contains("`infrastructure` - Infrastructure"));

@@ -47,6 +47,9 @@ lazy_static = "1.5"
 schemars = { version = "0.8", features = ["chrono", "uuid"] }
 llm_json = "1.0"
 
+# Template Engine
+minijinja = "2"
+
 # Environment & Config
 dotenvy = "0.15"
 
