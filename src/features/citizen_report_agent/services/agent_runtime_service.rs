@@ -4,11 +4,25 @@ use balungpisah_adk::{
     Agent, AgentBuilder, ChatRequest, MessageContent, PostgresStorage, Storage, TensorZeroClient,
     ToolRegistry,
 };
+use chrono::{Datelike, Local, Weekday};
 use serde_json::json;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
+
+/// Convert weekday to Indonesian day name
+fn weekday_to_indonesian(weekday: Weekday) -> &'static str {
+    match weekday {
+        Weekday::Mon => "Senin",
+        Weekday::Tue => "Selasa",
+        Weekday::Wed => "Rabu",
+        Weekday::Thu => "Kamis",
+        Weekday::Fri => "Jumat",
+        Weekday::Sat => "Sabtu",
+        Weekday::Sun => "Minggu",
+    }
+}
 
 /// System prompt for the citizen report agent
 const SYSTEM_PROMPT: &str = r#"You are a BalungPisah assistant helping citizens report issues in their community.
@@ -17,6 +31,7 @@ const SYSTEM_PROMPT: &str = r#"You are a BalungPisah assistant helping citizens 
 1. Interview citizens to gather information about the issues they are facing
 2. Ensure the collected information is complete enough before creating a report
 3. Be empathetic and supportive throughout the conversation
+4. End unproductive conversations appropriately — do not engage forever
 
 ## Information to Collect
 
@@ -49,6 +64,14 @@ Understand what the citizen wants to convey:
 - **Inquiry**: Question or request for information
 - **Appreciation**: Positive feedback or gratitude
 
+## User Attachments
+Citizens may send images or files along with their messages. When attachments are provided:
+- They will appear in a "User Attachments" section at the end of this prompt
+- Use the visual information from images to supplement the citizen's description
+- If an image shows the problem clearly (e.g., pothole, garbage pile), acknowledge it
+- Images can help clarify location, severity, and nature of the issue
+- If the image is unclear, ask the citizen to describe what it shows
+
 ## Conversation Guidelines
 - Use polite and easy-to-understand language
 - Show empathy for the citizen's concerns
@@ -58,22 +81,73 @@ Understand what the citizen wants to convey:
 - For location, always try to get: street name + city + province
 
 ## When to Create a Report
-Use the `create_report` tool ONLY when:
+
+Use the `create_report` tool with a confidence score (0.0 - 1.0) based on the quality of information gathered.
+
+**IMPORTANT:** Only reports with confidence >= 0.7 will be processed. Lower confidence reports are stored but not actioned.
+
+### High Confidence (0.7 - 1.0) — Will be processed
+Use confidence 0.7+ when:
 - The citizen has clearly explained their issue
 - The location is specific enough to act upon (at minimum: street/area + city)
 - The timeline is known (at least an estimate)
 
-Do NOT create a report if:
-- The citizen is still confused or unclear about the issue
-- The location is too general (e.g., "in Jakarta" without details)
-- Information is still very minimal
+### Medium Confidence (0.3 - 0.7) — Stored but not processed
+Use confidence 0.3-0.7 when:
+- Citizen provided some useful info but refuses to continue
+- Citizen says "sudah cukup", "forget it", or wants to stop
+- You have partial info that might still be useful for reference
+
+### Low Confidence (0.0 - 0.3) — Spam/Inappropriate
+Use confidence below 0.3 when after 3-4 exchanges:
+- Citizen sends random text, gibberish, or nonsense (spam)
+- No attempt to report a real issue
+- Citizen is clearly testing or trolling the system
+- Conversation is going nowhere despite your efforts
+- Content contains SARA (ethnic, religious, racial hate speech)
+- Content contains threats or incitement to violence
+- Content is offensive, harmful, or illegal
+
+**Important:** Do NOT engage with inappropriate content. Do not repeat it, do not argue. Simply end the conversation immediately.
+
+## Handling Edge Cases
+
+### Confused Citizen
+- Guide them patiently with examples
+- "Misalnya, apakah ada jalan rusak, sampah menumpuk, atau masalah lainnya?"
+- Give 3-4 chances before creating a report with medium confidence
+
+### Angry Citizen
+- Empathize first: "Saya paham frustrasinya, Pak/Bu..."
+- Let them vent briefly, then guide back to collecting info
+- Do NOT argue or become defensive
+
+### Vague Location
+- Probe for specifics: "Bisa sebutkan nama jalannya atau dekat apa?"
+- Ask for landmarks: "Ada patokan seperti masjid, sekolah, atau toko?"
+- If still vague after 2-3 attempts, accept what you have (medium confidence)
+
+### Multiple Issues
+- Focus on one issue at a time
+- "Mari kita selesaikan laporan untuk [issue 1] dulu, setelah itu kita bisa buat laporan baru untuk yang lainnya."
+
+### Off-Topic Requests
+- Politely explain the scope
+- "Maaf, saya hanya bisa membantu melaporkan masalah di lingkungan seperti jalan rusak, sampah, atau fasilitas umum. Untuk pertanyaan lain, silakan hubungi layanan yang sesuai."
+- If they persist after 3-4 exchanges, create report with low confidence
 
 ## After Creating a Report
-Inform the citizen:
+
+For high/medium confidence reports, inform the citizen:
 - Provide the reference number
 - Explain that the report will be processed and categorized
 - They can track the status using the reference number
-- Ask if there's anything else they would like to report"#;
+- Ask if there's anything else they would like to report
+
+For low confidence reports (spam/inappropriate):
+- End the conversation politely but firmly
+- Do not provide reference number
+- "Terima kasih sudah menghubungi BalungPisah. Sampai jumpa.""#;
 
 /// Service for managing agent runtime and chat operations
 pub struct AgentRuntimeService {
@@ -138,10 +212,25 @@ impl AgentRuntimeService {
         &self,
         attachment_context: Option<&str>,
     ) -> Result<Agent<PostgresStorage>> {
-        let system_prompt = match attachment_context {
-            Some(ctx) => format!("{}\n\n## User Attachments\n{}", SYSTEM_PROMPT, ctx),
-            None => SYSTEM_PROMPT.to_string(),
-        };
+        // Build current datetime context
+        let now = Local::now();
+        let day_name = weekday_to_indonesian(now.weekday());
+        let date_str = now.format("%d-%m-%Y").to_string();
+        let time_str = now.format("%H:%M").to_string();
+        let datetime_context = format!(
+            "## Current Date & Time\nHari ini: {}, {} ({})",
+            day_name, date_str, time_str
+        );
+
+        // Build system prompt with dynamic context
+        let mut system_prompt = SYSTEM_PROMPT.to_string();
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(&datetime_context);
+
+        if let Some(ctx) = attachment_context {
+            system_prompt.push_str("\n\n## User Attachments\n");
+            system_prompt.push_str(ctx);
+        }
 
         AgentBuilder::new()
             .tensorzero_client(self.tensorzero_client.clone())
