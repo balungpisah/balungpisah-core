@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, reference_number, user_id, platform,\n                status as \"status: TicketStatus\",\n                confidence_score, completeness_score,\n                retry_count, error_message, report_id,\n                submitted_at, processed_at, created_at\n            FROM tickets\n            ORDER BY created_at DESC\n            OFFSET $1 LIMIT $2\n            ",
+  "query": "\n            SELECT\n                id, reference_number, adk_thread_id, user_id, platform,\n                status as \"status: TicketStatus\",\n                confidence_score, completeness_score,\n                retry_count, error_message, report_id,\n                submitted_at, processed_at, last_attempt_at,\n                created_at, updated_at\n            FROM tickets\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -15,16 +15,21 @@
       },
       {
         "ordinal": 2,
+        "name": "adk_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
         "name": "user_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "platform",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "status: TicketStatus",
         "type_info": {
           "Custom": {
@@ -41,50 +46,59 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "confidence_score",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "completeness_score",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "retry_count",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "error_message",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "report_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "submitted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "processed_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
+        "name": "last_attempt_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
         "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -94,14 +108,17 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       true,
       true,
       false,
       true,
+      true,
+      false,
       false
     ]
   },
-  "hash": "a3e7d17a1897757a31d2edcc1c8ab76bc7bfa2d14342ed8ffa48e447d637c559"
+  "hash": "4f4d64bcbccef22455b6bfe1138bd3e18b7d678a8296a467c12dc322811de989"
 }

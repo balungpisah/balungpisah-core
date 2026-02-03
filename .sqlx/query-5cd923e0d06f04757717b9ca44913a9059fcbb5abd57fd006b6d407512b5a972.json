@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, email, expectation, created_at\n            FROM expectations\n            ORDER BY created_at DESC\n            OFFSET $1 LIMIT $2\n            ",
+  "query": "\n            SELECT id, name, email, expectation, created_at\n            FROM expectations\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -31,8 +31,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -43,5 +42,5 @@
       false
     ]
   },
-  "hash": "cd4d237ec9f62a325d8e9a79f218c216fd2663baa2bef368f4f823e58720abaa"
+  "hash": "5cd923e0d06f04757717b9ca44913a9059fcbb5abd57fd006b6d407512b5a972"
 }

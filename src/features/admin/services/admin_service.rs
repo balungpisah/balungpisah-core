@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
 use crate::features::admin::dtos::*;
-use crate::features::reports::models::{ReportSeverity, ReportStatus};
+use crate::features::reports::models::{ReportSeverity, ReportStatus, ReportTagType};
 use crate::features::tickets::models::TicketStatus;
 
 /// Service for admin queries
@@ -20,40 +20,101 @@ impl AdminService {
     // EXPECTATIONS
     // =========================================================================
 
-    /// List expectations with pagination
+    /// List expectations with pagination and filters
     pub async fn list_expectations(
         &self,
-        offset: i64,
-        limit: i64,
+        params: &ExpectationQueryParams,
     ) -> Result<(Vec<AdminExpectationDto>, i64)> {
-        // Get total count
-        let total = sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!" FROM expectations"#)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to count expectations: {:?}", e);
-                AppError::Database(e)
-            })?;
+        let offset = params.offset();
+        let limit = params.limit();
+        let sort_dir = params.sort.as_sql();
 
-        // Get paginated data
-        let rows = sqlx::query!(
+        // Build WHERE clause dynamically
+        let mut conditions = Vec::new();
+        let mut args: Vec<String> = Vec::new();
+
+        if let Some(has_email) = params.has_email {
+            if has_email {
+                conditions.push("email IS NOT NULL".to_string());
+            } else {
+                conditions.push("email IS NULL".to_string());
+            }
+        }
+
+        if let Some(from_date) = params.from_date {
+            args.push(from_date.to_string());
+            conditions.push(format!("created_at >= ${}::date", args.len()));
+        }
+
+        if let Some(to_date) = params.to_date {
+            args.push(to_date.to_string());
+            conditions.push(format!(
+                "created_at < (${}::date + interval '1 day')",
+                args.len()
+            ));
+        }
+
+        if let Some(ref search) = params.search {
+            args.push(format!("%{}%", search.to_lowercase()));
+            conditions.push(format!(
+                "(LOWER(name) LIKE ${0} OR LOWER(expectation) LIKE ${0})",
+                args.len()
+            ));
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+
+        // Get total count
+        let count_query = format!(r#"SELECT COUNT(*) FROM expectations {}"#, where_clause);
+        let total: i64 = self.execute_count_query(&count_query, &args).await?;
+
+        // Get paginated data with dynamic ORDER BY
+        let data_query = format!(
             r#"
             SELECT id, name, email, expectation, created_at
             FROM expectations
-            ORDER BY created_at DESC
-            OFFSET $1 LIMIT $2
+            {}
+            ORDER BY created_at {}
+            OFFSET {} LIMIT {}
             "#,
-            offset,
-            limit
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to list expectations: {:?}", e);
+            where_clause, sort_dir, offset, limit
+        );
+
+        let items = self.execute_expectations_query(&data_query, &args).await?;
+
+        Ok((items, total))
+    }
+
+    async fn execute_count_query(&self, query: &str, args: &[String]) -> Result<i64> {
+        let mut sqlx_query = sqlx::query_scalar::<_, i64>(query);
+        for arg in args {
+            sqlx_query = sqlx_query.bind(arg);
+        }
+        sqlx_query.fetch_one(&self.pool).await.map_err(|e| {
+            tracing::error!("Failed to execute count query: {:?}", e);
+            AppError::Database(e)
+        })
+    }
+
+    async fn execute_expectations_query(
+        &self,
+        query: &str,
+        args: &[String],
+    ) -> Result<Vec<AdminExpectationDto>> {
+        let mut sqlx_query = sqlx::query_as::<_, ExpectationRow>(query);
+        for arg in args {
+            sqlx_query = sqlx_query.bind(arg);
+        }
+        let rows = sqlx_query.fetch_all(&self.pool).await.map_err(|e| {
+            tracing::error!("Failed to execute expectations query: {:?}", e);
             AppError::Database(e)
         })?;
 
-        let items = rows
+        Ok(rows
             .into_iter()
             .map(|r| AdminExpectationDto {
                 id: r.id,
@@ -62,57 +123,135 @@ impl AdminService {
                 expectation: r.expectation,
                 created_at: r.created_at,
             })
-            .collect();
+            .collect())
+    }
 
-        Ok((items, total))
+    /// Get a single expectation by ID
+    pub async fn get_expectation(&self, id: Uuid) -> Result<AdminExpectationDto> {
+        let row = sqlx::query!(
+            r#"
+            SELECT id, name, email, expectation, created_at
+            FROM expectations
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get expectation: {:?}", e);
+            AppError::Database(e)
+        })?
+        .ok_or_else(|| AppError::NotFound("Expectation not found".to_string()))?;
+
+        Ok(AdminExpectationDto {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            expectation: row.expectation,
+            created_at: row.created_at,
+        })
     }
 
     // =========================================================================
     // REPORTS
     // =========================================================================
 
-    /// List reports with pagination (includes all statuses for admin)
+    /// List reports with pagination and filters
     pub async fn list_reports(
         &self,
-        offset: i64,
-        limit: i64,
+        params: &ReportQueryParams,
     ) -> Result<(Vec<AdminReportDto>, i64)> {
-        // Get total count
-        let total = sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!" FROM reports"#)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to count reports: {:?}", e);
-                AppError::Database(e)
-            })?;
+        let offset = params.offset();
+        let limit = params.limit();
+        let sort_by = params.sort_by.as_sql();
+        let sort_dir = params.sort.as_sql();
 
-        // Get paginated reports
-        let rows = sqlx::query!(
+        // Build WHERE clause dynamically
+        let mut conditions = Vec::new();
+        let mut args: Vec<String> = Vec::new();
+
+        if let Some(ref status) = params.status {
+            args.push(status.to_string());
+            conditions.push(format!("status = ${}::report_status", args.len()));
+        }
+
+        if let Some(from_date) = params.from_date {
+            args.push(from_date.to_string());
+            conditions.push(format!("created_at >= ${}::date", args.len()));
+        }
+
+        if let Some(to_date) = params.to_date {
+            args.push(to_date.to_string());
+            conditions.push(format!(
+                "created_at < (${}::date + interval '1 day')",
+                args.len()
+            ));
+        }
+
+        if let Some(ref search) = params.search {
+            args.push(format!("%{}%", search.to_lowercase()));
+            conditions.push(format!(
+                "(LOWER(reference_number) LIKE ${0} OR LOWER(title) LIKE ${0})",
+                args.len()
+            ));
+        }
+
+        if let Some(ref user_id) = params.user_id {
+            args.push(user_id.clone());
+            conditions.push(format!("user_id = ${}", args.len()));
+        }
+
+        if let Some(ref platform) = params.platform {
+            args.push(platform.clone());
+            conditions.push(format!("platform = ${}", args.len()));
+        }
+
+        if let Some(has_attachments) = params.has_attachments {
+            if has_attachments {
+                conditions.push(
+                    "EXISTS (SELECT 1 FROM report_attachments WHERE report_id = reports.id)"
+                        .to_string(),
+                );
+            } else {
+                conditions.push(
+                    "NOT EXISTS (SELECT 1 FROM report_attachments WHERE report_id = reports.id)"
+                        .to_string(),
+                );
+            }
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+
+        // Get total count
+        let count_query = format!(r#"SELECT COUNT(*) FROM reports {}"#, where_clause);
+        let total: i64 = self.execute_count_query(&count_query, &args).await?;
+
+        // Get paginated data with dynamic ORDER BY
+        let data_query = format!(
             r#"
             SELECT
                 id, reference_number, title, description,
-                status as "status: ReportStatus",
-                user_id, platform,
-                created_at, updated_at
+                status, user_id, platform, created_at, updated_at
             FROM reports
-            ORDER BY created_at DESC
-            OFFSET $1 LIMIT $2
+            {}
+            ORDER BY {} {}
+            OFFSET {} LIMIT {}
             "#,
-            offset,
-            limit
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to list reports: {:?}", e);
-            AppError::Database(e)
-        })?;
+            where_clause, sort_by, sort_dir, offset, limit
+        );
+
+        let rows = self.execute_reports_query(&data_query, &args).await?;
 
         let mut items = Vec::with_capacity(rows.len());
         for row in rows {
             let categories = self.get_report_categories(row.id).await?;
             let location = self.get_report_location(row.id).await?;
-            let attachments = self.get_report_attachments(row.id).await?;
+            let attachment_count = self.get_report_attachment_count(row.id).await?;
 
             items.push(AdminReportDto {
                 id: row.id,
@@ -126,11 +265,79 @@ impl AdminService {
                 updated_at: row.updated_at,
                 categories,
                 location,
-                attachments,
+                attachment_count,
             });
         }
 
         Ok((items, total))
+    }
+
+    async fn execute_reports_query(&self, query: &str, args: &[String]) -> Result<Vec<ReportRow>> {
+        let mut sqlx_query = sqlx::query_as::<_, ReportRow>(query);
+        for arg in args {
+            sqlx_query = sqlx_query.bind(arg);
+        }
+        sqlx_query.fetch_all(&self.pool).await.map_err(|e| {
+            tracing::error!("Failed to execute reports query: {:?}", e);
+            AppError::Database(e)
+        })
+    }
+
+    /// Get a single report by ID with full details
+    pub async fn get_report(&self, id: Uuid) -> Result<AdminReportDetailDto> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                id, reference_number, ticket_id, cluster_id,
+                title, description, timeline, impact,
+                status as "status: ReportStatus",
+                user_id, platform, adk_thread_id,
+                verified_at, verified_by,
+                resolved_at, resolved_by, resolution_notes,
+                created_at, updated_at
+            FROM reports
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get report: {:?}", e);
+            AppError::Database(e)
+        })?
+        .ok_or_else(|| AppError::NotFound("Report not found".to_string()))?;
+
+        let categories = self.get_report_categories(id).await?;
+        let tags = self.get_report_tags(id).await?;
+        let location = self.get_report_location(id).await?;
+        let attachments = self.get_report_attachments(id).await?;
+
+        Ok(AdminReportDetailDto {
+            id: row.id,
+            reference_number: row.reference_number,
+            ticket_id: row.ticket_id,
+            cluster_id: row.cluster_id,
+            title: row.title,
+            description: row.description,
+            timeline: row.timeline,
+            impact: row.impact,
+            status: row.status,
+            user_id: row.user_id,
+            platform: row.platform,
+            adk_thread_id: row.adk_thread_id,
+            verified_at: row.verified_at,
+            verified_by: row.verified_by,
+            resolved_at: row.resolved_at,
+            resolved_by: row.resolved_by,
+            resolution_notes: row.resolution_notes,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            categories,
+            tags,
+            location,
+            attachments,
+        })
     }
 
     /// Get categories for a report
@@ -165,6 +372,27 @@ impl AdminService {
                 severity: r.severity,
             })
             .collect())
+    }
+
+    /// Get tags for a report
+    async fn get_report_tags(&self, report_id: Uuid) -> Result<Vec<ReportTagType>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT tag_type as "tag_type: ReportTagType"
+            FROM report_tags
+            WHERE report_id = $1
+            ORDER BY tag_type
+            "#,
+            report_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get report tags: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        Ok(rows.into_iter().map(|r| r.tag_type).collect())
     }
 
     /// Get location for a report
@@ -245,120 +473,277 @@ impl AdminService {
             .collect())
     }
 
+    /// Get attachment count for a report
+    async fn get_report_attachment_count(&self, report_id: Uuid) -> Result<i64> {
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) as "count!" FROM report_attachments WHERE report_id = $1"#,
+            report_id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to count report attachments: {:?}", e);
+            AppError::Database(e)
+        })
+    }
+
     // =========================================================================
     // CONTRIBUTORS
     // =========================================================================
 
-    /// List contributors with pagination
+    /// List contributors with pagination and filters
     pub async fn list_contributors(
         &self,
-        offset: i64,
-        limit: i64,
+        params: &ContributorQueryParams,
     ) -> Result<(Vec<AdminContributorDto>, i64)> {
-        // Get total count
-        let total = sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!" FROM contributors"#)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to count contributors: {:?}", e);
-                AppError::Database(e)
-            })?;
+        let offset = params.offset();
+        let limit = params.limit();
+        let sort_dir = params.sort.as_sql();
 
-        // Get paginated data
-        let rows = sqlx::query!(
+        // Build WHERE clause dynamically
+        let mut conditions = Vec::new();
+        let mut args: Vec<String> = Vec::new();
+
+        if let Some(ref submission_type) = params.submission_type {
+            args.push(submission_type.clone());
+            conditions.push(format!("submission_type = ${}", args.len()));
+        }
+
+        if let Some(from_date) = params.from_date {
+            args.push(from_date.to_string());
+            conditions.push(format!("created_at >= ${}::date", args.len()));
+        }
+
+        if let Some(to_date) = params.to_date {
+            args.push(to_date.to_string());
+            conditions.push(format!(
+                "created_at < (${}::date + interval '1 day')",
+                args.len()
+            ));
+        }
+
+        if let Some(ref search) = params.search {
+            args.push(format!("%{}%", search.to_lowercase()));
+            conditions.push(format!(
+                "(LOWER(name) LIKE ${0} OR LOWER(email) LIKE ${0} OR LOWER(organization_name) LIKE ${0})",
+                args.len()
+            ));
+        }
+
+        if let Some(ref city) = params.city {
+            args.push(city.clone());
+            conditions.push(format!("city = ${}", args.len()));
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+
+        // Get total count
+        let count_query = format!(r#"SELECT COUNT(*) FROM contributors {}"#, where_clause);
+        let total: i64 = self.execute_count_query(&count_query, &args).await?;
+
+        // Get paginated data with dynamic ORDER BY
+        let data_query = format!(
             r#"
             SELECT
-                id, submission_type,
-                name, email, whatsapp, city, role, skills, bio, portfolio_url, aspiration,
-                organization_name, organization_type, contact_name, contact_position,
-                contact_whatsapp, contact_email, contribution_offer,
-                agreed, created_at
+                id, submission_type, name, email, city, organization_name, created_at
             FROM contributors
-            ORDER BY created_at DESC
-            OFFSET $1 LIMIT $2
+            {}
+            ORDER BY created_at {}
+            OFFSET {} LIMIT {}
             "#,
-            offset,
-            limit
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to list contributors: {:?}", e);
+            where_clause, sort_dir, offset, limit
+        );
+
+        let items = self.execute_contributors_query(&data_query, &args).await?;
+
+        Ok((items, total))
+    }
+
+    async fn execute_contributors_query(
+        &self,
+        query: &str,
+        args: &[String],
+    ) -> Result<Vec<AdminContributorDto>> {
+        let mut sqlx_query = sqlx::query_as::<_, ContributorRow>(query);
+        for arg in args {
+            sqlx_query = sqlx_query.bind(arg);
+        }
+        let rows = sqlx_query.fetch_all(&self.pool).await.map_err(|e| {
+            tracing::error!("Failed to execute contributors query: {:?}", e);
             AppError::Database(e)
         })?;
 
-        let items = rows
+        Ok(rows
             .into_iter()
             .map(|r| AdminContributorDto {
                 id: r.id,
                 submission_type: r.submission_type,
                 name: r.name,
                 email: r.email,
-                whatsapp: r.whatsapp,
                 city: r.city,
-                role: r.role,
-                skills: r.skills,
-                bio: r.bio,
-                portfolio_url: r.portfolio_url,
-                aspiration: r.aspiration,
                 organization_name: r.organization_name,
-                organization_type: r.organization_type,
-                contact_name: r.contact_name,
-                contact_position: r.contact_position,
-                contact_whatsapp: r.contact_whatsapp,
-                contact_email: r.contact_email,
-                contribution_offer: r.contribution_offer,
-                agreed: r.agreed,
                 created_at: r.created_at,
             })
-            .collect();
+            .collect())
+    }
 
-        Ok((items, total))
+    /// Get a single contributor by ID with full details
+    pub async fn get_contributor(&self, id: Uuid) -> Result<AdminContributorDetailDto> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                id, submission_type,
+                name, email, whatsapp, city, role, skills, bio, portfolio_url, aspiration,
+                organization_name, organization_type, contact_name, contact_position,
+                contact_whatsapp, contact_email, contribution_offer,
+                agreed, created_at, updated_at
+            FROM contributors
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get contributor: {:?}", e);
+            AppError::Database(e)
+        })?
+        .ok_or_else(|| AppError::NotFound("Contributor not found".to_string()))?;
+
+        Ok(AdminContributorDetailDto {
+            id: row.id,
+            submission_type: row.submission_type,
+            name: row.name,
+            email: row.email,
+            whatsapp: row.whatsapp,
+            city: row.city,
+            role: row.role,
+            skills: row.skills,
+            bio: row.bio,
+            portfolio_url: row.portfolio_url,
+            aspiration: row.aspiration,
+            organization_name: row.organization_name,
+            organization_type: row.organization_type,
+            contact_name: row.contact_name,
+            contact_position: row.contact_position,
+            contact_whatsapp: row.contact_whatsapp,
+            contact_email: row.contact_email,
+            contribution_offer: row.contribution_offer,
+            agreed: row.agreed,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
     }
 
     // =========================================================================
     // TICKETS
     // =========================================================================
 
-    /// List tickets with pagination
+    /// List tickets with pagination and filters
     pub async fn list_tickets(
         &self,
-        offset: i64,
-        limit: i64,
+        params: &TicketQueryParams,
     ) -> Result<(Vec<AdminTicketDto>, i64)> {
-        // Get total count
-        let total = sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!" FROM tickets"#)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to count tickets: {:?}", e);
-                AppError::Database(e)
-            })?;
+        let offset = params.offset();
+        let limit = params.limit();
+        let sort_by = params.sort_by.as_sql();
+        let sort_dir = params.sort.as_sql();
 
-        // Get paginated data
-        let rows = sqlx::query!(
+        // Build WHERE clause dynamically
+        let mut conditions = Vec::new();
+        let mut args: Vec<String> = Vec::new();
+
+        if let Some(ref status) = params.status {
+            args.push(status.to_string());
+            conditions.push(format!("status = ${}::ticket_status", args.len()));
+        }
+
+        if let Some(from_date) = params.from_date {
+            args.push(from_date.to_string());
+            conditions.push(format!("created_at >= ${}::date", args.len()));
+        }
+
+        if let Some(to_date) = params.to_date {
+            args.push(to_date.to_string());
+            conditions.push(format!(
+                "created_at < (${}::date + interval '1 day')",
+                args.len()
+            ));
+        }
+
+        if let Some(ref search) = params.search {
+            args.push(format!("%{}%", search.to_lowercase()));
+            conditions.push(format!("LOWER(reference_number) LIKE ${}", args.len()));
+        }
+
+        if let Some(ref user_id) = params.user_id {
+            args.push(user_id.clone());
+            conditions.push(format!("user_id = ${}", args.len()));
+        }
+
+        if let Some(ref platform) = params.platform {
+            args.push(platform.clone());
+            conditions.push(format!("platform = ${}", args.len()));
+        }
+
+        if let Some(has_error) = params.has_error {
+            if has_error {
+                conditions.push("error_message IS NOT NULL".to_string());
+            } else {
+                conditions.push("error_message IS NULL".to_string());
+            }
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+
+        // Get total count
+        let count_query = format!(r#"SELECT COUNT(*) FROM tickets {}"#, where_clause);
+        let total: i64 = self.execute_count_query(&count_query, &args).await?;
+
+        // Get paginated data with dynamic ORDER BY
+        let data_query = format!(
             r#"
             SELECT
                 id, reference_number, user_id, platform,
-                status as "status: TicketStatus",
-                confidence_score, completeness_score,
+                status, confidence_score,
                 retry_count, error_message, report_id,
                 submitted_at, processed_at, created_at
             FROM tickets
-            ORDER BY created_at DESC
-            OFFSET $1 LIMIT $2
+            {}
+            ORDER BY {} {}
+            OFFSET {} LIMIT {}
             "#,
-            offset,
-            limit
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to list tickets: {:?}", e);
+            where_clause, sort_by, sort_dir, offset, limit
+        );
+
+        let items = self.execute_tickets_query(&data_query, &args).await?;
+
+        Ok((items, total))
+    }
+
+    async fn execute_tickets_query(
+        &self,
+        query: &str,
+        args: &[String],
+    ) -> Result<Vec<AdminTicketDto>> {
+        let mut sqlx_query = sqlx::query_as::<_, TicketRow>(query);
+        for arg in args {
+            sqlx_query = sqlx_query.bind(arg);
+        }
+        let rows = sqlx_query.fetch_all(&self.pool).await.map_err(|e| {
+            tracing::error!("Failed to execute tickets query: {:?}", e);
             AppError::Database(e)
         })?;
 
-        let items = rows
+        Ok(rows
             .into_iter()
             .map(|r| AdminTicketDto {
                 id: r.id,
@@ -367,18 +752,116 @@ impl AdminService {
                 platform: r.platform,
                 status: r.status,
                 confidence_score: r.confidence_score.to_string().parse::<f64>().unwrap_or(0.0),
-                completeness_score: r
-                    .completeness_score
-                    .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0)),
                 retry_count: r.retry_count,
-                error_message: r.error_message,
+                has_error: r.error_message.is_some(),
                 report_id: r.report_id,
                 submitted_at: r.submitted_at,
                 processed_at: r.processed_at,
                 created_at: r.created_at,
             })
-            .collect();
-
-        Ok((items, total))
+            .collect())
     }
+
+    /// Get a single ticket by ID with full details
+    pub async fn get_ticket(&self, id: Uuid) -> Result<AdminTicketDetailDto> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                id, reference_number, adk_thread_id, user_id, platform,
+                status as "status: TicketStatus",
+                confidence_score, completeness_score,
+                retry_count, error_message, report_id,
+                submitted_at, processed_at, last_attempt_at,
+                created_at, updated_at
+            FROM tickets
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get ticket: {:?}", e);
+            AppError::Database(e)
+        })?
+        .ok_or_else(|| AppError::NotFound("Ticket not found".to_string()))?;
+
+        Ok(AdminTicketDetailDto {
+            id: row.id,
+            reference_number: row.reference_number,
+            adk_thread_id: row.adk_thread_id,
+            user_id: row.user_id,
+            platform: row.platform,
+            status: row.status,
+            confidence_score: row
+                .confidence_score
+                .to_string()
+                .parse::<f64>()
+                .unwrap_or(0.0),
+            completeness_score: row
+                .completeness_score
+                .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0)),
+            retry_count: row.retry_count,
+            error_message: row.error_message,
+            report_id: row.report_id,
+            submitted_at: row.submitted_at,
+            processed_at: row.processed_at,
+            last_attempt_at: row.last_attempt_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+}
+
+// =========================================================================
+// ROW TYPES FOR DYNAMIC QUERIES
+// =========================================================================
+
+#[derive(sqlx::FromRow)]
+struct ExpectationRow {
+    id: Uuid,
+    name: Option<String>,
+    email: Option<String>,
+    expectation: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(sqlx::FromRow)]
+struct ReportRow {
+    id: Uuid,
+    reference_number: Option<String>,
+    title: Option<String>,
+    description: Option<String>,
+    status: ReportStatus,
+    user_id: Option<String>,
+    platform: Option<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(sqlx::FromRow)]
+struct ContributorRow {
+    id: Uuid,
+    submission_type: String,
+    name: Option<String>,
+    email: Option<String>,
+    city: Option<String>,
+    organization_name: Option<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(sqlx::FromRow)]
+struct TicketRow {
+    id: Uuid,
+    reference_number: String,
+    user_id: String,
+    platform: String,
+    status: TicketStatus,
+    confidence_score: rust_decimal::Decimal,
+    retry_count: i32,
+    error_message: Option<String>,
+    report_id: Option<Uuid>,
+    submitted_at: chrono::DateTime<chrono::Utc>,
+    processed_at: Option<chrono::DateTime<chrono::Utc>>,
+    created_at: chrono::DateTime<chrono::Utc>,
 }
