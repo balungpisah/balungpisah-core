@@ -76,12 +76,13 @@ impl ReportService {
 
     /// Create a report submission (new workflow - from agent)
     /// Returns the report with reference number for immediate citizen feedback
+    /// Status starts as 'pending' - waiting for background processing
     pub async fn create_submission(&self, data: &CreateReportSubmission) -> Result<Report> {
         let report = sqlx::query_as!(
             Report,
             r#"
             INSERT INTO reports (reference_number, adk_thread_id, user_id, platform, status)
-            VALUES ($1, $2, $3, $4, 'draft')
+            VALUES ($1, $2, $3, $4, 'pending')
             RETURNING
                 id, ticket_id, cluster_id, title, description,
                 timeline, impact,
@@ -130,6 +131,7 @@ impl ReportService {
     }
 
     /// Update report with extracted content (called by ReportProcessor)
+    /// Status changes to 'draft' - processed successfully, waiting for verification
     pub async fn update_content(
         &self,
         report_id: Uuid,
@@ -143,7 +145,7 @@ impl ReportService {
             r#"
             UPDATE reports
             SET title = $2, description = $3, timeline = $4, impact = $5,
-                status = 'pending', updated_at = NOW()
+                status = 'draft', updated_at = NOW()
             WHERE id = $1
             RETURNING
                 id, ticket_id, cluster_id, title, description,
@@ -395,6 +397,37 @@ impl ReportService {
         })?;
 
         Ok(())
+    }
+
+    /// Mark report as rejected (low confidence or invalid)
+    pub async fn reject(&self, report_id: Uuid, reason: Option<&str>) -> Result<Report> {
+        let report = sqlx::query_as!(
+            Report,
+            r#"
+            UPDATE reports
+            SET status = 'rejected', resolution_notes = $2, updated_at = NOW()
+            WHERE id = $1
+            RETURNING
+                id, ticket_id, cluster_id, title, description,
+                timeline, impact,
+                status as "status: ReportStatus",
+                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
+            "#,
+            report_id,
+            reason
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to reject report: {:?}", e);
+            AppError::Database(e)
+        })?
+        .ok_or_else(|| AppError::NotFound(format!("Report {} not found", report_id)))?;
+
+        tracing::info!("Report {} rejected: {:?}", report_id, reason);
+        Ok(report)
     }
 
     /// Update report status

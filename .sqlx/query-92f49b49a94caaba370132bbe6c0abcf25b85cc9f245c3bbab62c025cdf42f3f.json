@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO reports (reference_number, adk_thread_id, user_id, platform, status)\n            VALUES ($1, $2, $3, $4, 'draft')\n            RETURNING\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at,\n                reference_number, adk_thread_id, user_id, platform\n            ",
+  "query": "\n            UPDATE reports\n            SET title = $2, description = $3, timeline = $4, impact = $5,\n                status = 'draft', updated_at = NOW()\n            WHERE id = $1\n            RETURNING\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at,\n                reference_number, adk_thread_id, user_id, platform\n            ",
   "describe": {
     "columns": [
       {
@@ -115,10 +115,11 @@
     ],
     "parameters": {
       "Left": [
-        "Varchar",
         "Uuid",
         "Varchar",
-        "Varchar"
+        "Text",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -143,5 +144,5 @@
       true
     ]
   },
-  "hash": "fcb9b4b29b39566e2c56e53bdd4fed70218f5a94ea5fda05ab451944ab7c1a66"
+  "hash": "92f49b49a94caaba370132bbe6c0abcf25b85cc9f245c3bbab62c025cdf42f3f"
 }

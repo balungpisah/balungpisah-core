@@ -20,6 +20,10 @@ const BATCH_INTERVAL_SECS: u64 = 30;
 /// Batch size for processing
 const BATCH_SIZE: i64 = 10;
 
+/// Minimum confidence score required for processing
+/// Reports below this threshold will be rejected
+const MIN_CONFIDENCE_THRESHOLD: f64 = 0.7;
+
 /// Report processor worker that runs in the background
 /// Processes report submissions by extracting data from conversations
 pub struct ReportProcessor {
@@ -103,11 +107,48 @@ impl ReportProcessor {
             AppError::Internal(format!("Report {} has no adk_thread_id", report.id))
         })?;
 
+        // Check confidence score - reject low confidence reports
+        let confidence = job
+            .confidence_score
+            .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0))
+            .unwrap_or(0.0);
+
+        if confidence < MIN_CONFIDENCE_THRESHOLD {
+            tracing::info!(
+                "Rejecting report {} (ref: {:?}) due to low confidence: {:.2}",
+                report.id,
+                report.reference_number,
+                confidence
+            );
+
+            self.report_service
+                .reject(
+                    report.id,
+                    Some(&format!(
+                        "Low confidence score: {:.2} (threshold: {:.2})",
+                        confidence, MIN_CONFIDENCE_THRESHOLD
+                    )),
+                )
+                .await?;
+
+            self.report_job_service.mark_completed(job.id).await?;
+
+            tracing::info!(
+                "Report job {} completed (rejected) for report {} (ref: {:?})",
+                job.id,
+                report.id,
+                report.reference_number
+            );
+
+            return Ok(());
+        }
+
         tracing::info!(
-            "Processing report job: {} for report: {} (ref: {:?})",
+            "Processing report job: {} for report: {} (ref: {:?}, confidence: {:.2})",
             job.id,
             report.id,
-            report.reference_number
+            report.reference_number,
+            confidence
         );
 
         // Mark as processing
