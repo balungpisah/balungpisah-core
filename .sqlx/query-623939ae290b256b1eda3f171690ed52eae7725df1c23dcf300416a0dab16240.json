@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO report_jobs (report_id, confidence_score, status)\n            VALUES ($1, $2, $3)\n            RETURNING\n                id, report_id, status as \"status: ReportJobStatus\",\n                confidence_score, retry_count, error_message,\n                submitted_at, processed_at, last_attempt_at, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "report_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status: ReportJobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "report_job_status",
+            "kind": {
+              "Enum": [
+                "submitted",
+                "processing",
+                "completed",
+                "failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "confidence_score",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "retry_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "error_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "processed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_attempt_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Numeric",
+        {
+          "Custom": {
+            "name": "report_job_status",
+            "kind": {
+              "Enum": [
+                "submitted",
+                "processing",
+                "completed",
+                "failed"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "623939ae290b256b1eda3f171690ed52eae7725df1c23dcf300416a0dab16240"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT nextval('report_reference_seq')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nextval",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "16d7e6a89d4b52626d453c7701f31be3c201f8ece8f88d3bd2a120cda6ed3731"
+}

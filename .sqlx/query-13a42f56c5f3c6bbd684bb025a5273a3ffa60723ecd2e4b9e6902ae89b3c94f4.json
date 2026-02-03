@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at\n            FROM reports\n            WHERE ticket_id = $1\n            ",
+  "query": "\n            INSERT INTO reports (ticket_id, title, description, timeline, impact)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at,\n                reference_number, adk_thread_id, user_id, platform\n            ",
   "describe": {
     "columns": [
       {
@@ -91,30 +91,58 @@
         "ordinal": 14,
         "name": "updated_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "reference_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 16,
+        "name": "adk_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "user_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 18,
+        "name": "platform",
+        "type_info": "Varchar"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Varchar",
+        "Text",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
       false,
-      false,
       true,
-      false,
-      false,
-      true,
-      true,
-      false,
       true,
       true,
       true,
       true,
       true,
       false,
-      false
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "9b4b1dc789b71ca0d94e15c37e2ab9058ff68148daec7d82f92fd818b4be7185"
+  "hash": "13a42f56c5f3c6bbd684bb025a5273a3ffa60723ecd2e4b9e6902ae89b3c94f4"
 }

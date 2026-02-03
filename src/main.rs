@@ -26,7 +26,7 @@ use crate::features::rate_limits::{
 use crate::features::regions::{routes as regions_routes, RegionService};
 use crate::features::reports::{
     routes as reports_routes, ClusteringService, GeocodingService, RegionLookupService,
-    ReportService,
+    ReportJobService, ReportProcessor, ReportService,
 };
 use crate::features::tickets::{
     routes as tickets_routes, ExtractionService, TicketProcessor, TicketService,
@@ -179,6 +179,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
 
     // Initialize Report Services
     let report_service = Arc::new(ReportService::new(pool.clone()));
+    let report_job_service = Arc::new(ReportJobService::new(pool.clone()));
     let geocoding_service = Arc::new(GeocodingService::new());
     let clustering_service = Arc::new(ClusteringService::new(pool.clone()));
     let region_lookup_service = Arc::new(RegionLookupService::new(pool.clone()));
@@ -246,20 +247,36 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         }
     };
 
-    // Spawn Ticket Processor Worker (if extraction service is available)
+    // Spawn background processor workers (if extraction service is available)
     if let Some(extraction_svc) = extraction_service {
-        let processor = TicketProcessor::new(
+        // Spawn Ticket Processor Worker (legacy - for existing tickets)
+        let ticket_processor = TicketProcessor::new(
             pool.clone(),
-            extraction_svc,
+            Arc::clone(&extraction_svc),
             Arc::clone(&geocoding_service),
             Arc::clone(&clustering_service),
             Arc::clone(&report_service),
             Arc::clone(&region_lookup_service),
         );
         tokio::spawn(async move {
-            processor.run().await;
+            ticket_processor.run().await;
         });
         tracing::info!("Ticket processor worker spawned");
+
+        // Spawn Report Processor Worker (new workflow)
+        let report_processor = ReportProcessor::new(
+            pool.clone(),
+            Arc::clone(&extraction_svc),
+            Arc::clone(&geocoding_service),
+            Arc::clone(&clustering_service),
+            Arc::clone(&report_service),
+            Arc::clone(&report_job_service),
+            Arc::clone(&region_lookup_service),
+        );
+        tokio::spawn(async move {
+            report_processor.run().await;
+        });
+        tracing::info!("Report processor worker spawned");
     }
 
     // Create tool registry with database pool for ticket creation

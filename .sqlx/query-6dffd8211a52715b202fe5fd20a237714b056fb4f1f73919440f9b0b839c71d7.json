@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) as \"count!\"\n            FROM reports\n            WHERE user_id = $1\n            AND created_at >= (CURRENT_DATE AT TIME ZONE 'Asia/Jakarta')\n            AND created_at < ((CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'Asia/Jakarta')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6dffd8211a52715b202fe5fd20a237714b056fb4f1f73919440f9b0b839c71d7"
+}

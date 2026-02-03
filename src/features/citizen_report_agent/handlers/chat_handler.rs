@@ -102,7 +102,7 @@ pub async fn chat_stream(
         .await?
     {
         return Err(AppError::RateLimitExceeded(
-            "You have reached your daily ticket limit. Please try again tomorrow after 00:00 WIB."
+            "You have reached your daily report limit. Please try again tomorrow after 00:00 WIB."
                 .to_string(),
         ));
     }
@@ -203,7 +203,7 @@ pub async fn chat_sync(
         .await?
     {
         return Err(AppError::RateLimitExceeded(
-            "You have reached your daily ticket limit. Please try again tomorrow after 00:00 WIB."
+            "You have reached your daily report limit. Please try again tomorrow after 00:00 WIB."
                 .to_string(),
         ));
     }

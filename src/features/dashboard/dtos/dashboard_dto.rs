@@ -99,8 +99,10 @@ pub struct ReportLocationInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DashboardReportDto {
     pub id: Uuid,
-    pub title: String,
-    pub description: String,
+    /// Report title (may be None for unprocessed reports)
+    pub title: Option<String>,
+    /// Report description (may be None for unprocessed reports)
+    pub description: Option<String>,
     pub status: ReportStatus,
     pub tag_type: Option<ReportTagType>,
     pub timeline: Option<String>,
@@ -114,9 +116,14 @@ pub struct DashboardReportDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DashboardReportDetailDto {
     pub id: Uuid,
-    pub ticket_id: Uuid,
-    pub title: String,
-    pub description: String,
+    /// Ticket ID (None for new report submission workflow)
+    pub ticket_id: Option<Uuid>,
+    /// Report reference number (for new workflow)
+    pub reference_number: Option<String>,
+    /// Report title (may be None for unprocessed reports)
+    pub title: Option<String>,
+    /// Report description (may be None for unprocessed reports)
+    pub description: Option<String>,
     pub status: ReportStatus,
     pub tag_type: Option<ReportTagType>,
     pub timeline: Option<String>,
@@ -330,7 +337,8 @@ pub struct DashboardRecentDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MapReportMarker {
     pub id: Uuid,
-    pub title: String,
+    /// Report title (may be None for unprocessed reports)
+    pub title: Option<String>,
     pub lat: f64,
     pub lon: f64,
     pub status: ReportStatus,

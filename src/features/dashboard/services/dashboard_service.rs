@@ -129,6 +129,7 @@ impl DashboardService {
             SELECT
                 r.id,
                 r.ticket_id,
+                r.reference_number,
                 r.title,
                 r.description,
                 r.status as "status: ReportStatus",
@@ -159,6 +160,7 @@ impl DashboardService {
         Ok(DashboardReportDetailDto {
             id: row.id,
             ticket_id: row.ticket_id,
+            reference_number: row.reference_number,
             title: row.title,
             description: row.description,
             status: row.status,

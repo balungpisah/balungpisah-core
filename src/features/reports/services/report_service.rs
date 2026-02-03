@@ -5,8 +5,9 @@ use uuid::Uuid;
 use crate::core::error::{AppError, Result};
 use crate::features::reports::dtos::UpdateReportStatusDto;
 use crate::features::reports::models::{
-    CreateReport, CreateReportCategory, CreateReportLocation, CreateReportTag, GeocodingSource,
-    Report, ReportCategory, ReportLocation, ReportSeverity, ReportStatus, ReportTag, ReportTagType,
+    CreateReport, CreateReportCategory, CreateReportLocation, CreateReportSubmission,
+    CreateReportTag, GeocodingSource, Report, ReportCategory, ReportLocation, ReportSeverity,
+    ReportStatus, ReportTag, ReportTagType,
 };
 
 /// Service for report operations
@@ -19,7 +20,24 @@ impl ReportService {
         Self { pool }
     }
 
-    /// Create a new report
+    /// Generate a reference number in format: RPT-YYYY-NNNNNNN
+    async fn generate_reference_number(&self) -> Result<String> {
+        let year = chrono::Utc::now().format("%Y").to_string();
+
+        // Get next value from sequence
+        let seq: i64 = sqlx::query_scalar!("SELECT nextval('report_reference_seq')")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to get next sequence value: {:?}", e);
+                AppError::Database(e)
+            })?
+            .unwrap_or(1);
+
+        Ok(format!("RPT-{}-{:07}", year, seq))
+    }
+
+    /// Create a new report (legacy - from ticket processor)
     pub async fn create(&self, data: &CreateReport) -> Result<Report> {
         let report = sqlx::query_as!(
             Report,
@@ -31,7 +49,8 @@ impl ReportService {
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
-                created_at, updated_at
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
             "#,
             data.ticket_id,
             data.title,
@@ -52,6 +71,103 @@ impl ReportService {
             data.ticket_id
         );
 
+        Ok(report)
+    }
+
+    /// Create a report submission (new workflow - from agent)
+    /// Returns the report with reference number for immediate citizen feedback
+    pub async fn create_submission(&self, data: &CreateReportSubmission) -> Result<Report> {
+        let report = sqlx::query_as!(
+            Report,
+            r#"
+            INSERT INTO reports (reference_number, adk_thread_id, user_id, platform, status)
+            VALUES ($1, $2, $3, $4, 'draft')
+            RETURNING
+                id, ticket_id, cluster_id, title, description,
+                timeline, impact,
+                status as "status: ReportStatus",
+                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
+            "#,
+            data.reference_number,
+            data.adk_thread_id,
+            data.user_id,
+            data.platform.as_deref().unwrap_or("web")
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create report submission: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        tracing::info!(
+            "Created report submission: {} (ref: {}) for user: {}",
+            report.id,
+            data.reference_number,
+            data.user_id
+        );
+
+        Ok(report)
+    }
+
+    /// Create a report submission with auto-generated reference number
+    pub async fn create_submission_auto_ref(
+        &self,
+        adk_thread_id: Uuid,
+        user_id: &str,
+        platform: Option<&str>,
+    ) -> Result<Report> {
+        let reference_number = self.generate_reference_number().await?;
+        let data = CreateReportSubmission {
+            reference_number,
+            adk_thread_id,
+            user_id: user_id.to_string(),
+            platform: platform.map(String::from),
+        };
+        self.create_submission(&data).await
+    }
+
+    /// Update report with extracted content (called by ReportProcessor)
+    pub async fn update_content(
+        &self,
+        report_id: Uuid,
+        title: &str,
+        description: &str,
+        timeline: Option<&str>,
+        impact: Option<&str>,
+    ) -> Result<Report> {
+        let report = sqlx::query_as!(
+            Report,
+            r#"
+            UPDATE reports
+            SET title = $2, description = $3, timeline = $4, impact = $5,
+                status = 'pending', updated_at = NOW()
+            WHERE id = $1
+            RETURNING
+                id, ticket_id, cluster_id, title, description,
+                timeline, impact,
+                status as "status: ReportStatus",
+                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
+            "#,
+            report_id,
+            title,
+            description,
+            timeline,
+            impact
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update report content: {:?}", e);
+            AppError::Database(e)
+        })?
+        .ok_or_else(|| AppError::NotFound(format!("Report {} not found", report_id)))?;
+
+        tracing::info!("Updated report content: {}", report_id);
         Ok(report)
     }
 
@@ -116,7 +232,8 @@ impl ReportService {
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
-                created_at, updated_at
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
             FROM reports
             WHERE id = $1
             "#,
@@ -131,6 +248,32 @@ impl ReportService {
         .ok_or_else(|| AppError::NotFound(format!("Report {} not found", id)))
     }
 
+    /// Get report by reference number
+    #[allow(dead_code)]
+    pub async fn get_by_reference(&self, reference_number: &str) -> Result<Option<Report>> {
+        sqlx::query_as!(
+            Report,
+            r#"
+            SELECT
+                id, ticket_id, cluster_id, title, description,
+                timeline, impact,
+                status as "status: ReportStatus",
+                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
+            FROM reports
+            WHERE reference_number = $1
+            "#,
+            reference_number
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get report by reference: {:?}", e);
+            AppError::Database(e)
+        })
+    }
+
     /// Get report by ticket ID
     #[allow(dead_code)]
     pub async fn get_by_ticket_id(&self, ticket_id: Uuid) -> Result<Option<Report>> {
@@ -142,7 +285,8 @@ impl ReportService {
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
-                created_at, updated_at
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
             FROM reports
             WHERE ticket_id = $1
             "#,
@@ -180,21 +324,21 @@ impl ReportService {
         })
     }
 
-    /// List reports by user
+    /// List reports by user (new workflow - query reports.user_id directly)
     pub async fn list_by_user(&self, user_id: &str) -> Result<Vec<Report>> {
         sqlx::query_as!(
             Report,
             r#"
             SELECT
-                r.id, r.ticket_id, r.cluster_id, r.title, r.description,
-                r.timeline, r.impact,
-                r.status as "status: ReportStatus",
-                r.verified_at, r.verified_by, r.resolved_at, r.resolved_by, r.resolution_notes,
-                r.created_at, r.updated_at
-            FROM reports r
-            JOIN tickets t ON t.id = r.ticket_id
-            WHERE t.user_id = $1
-            ORDER BY r.created_at DESC
+                id, ticket_id, cluster_id, title, description,
+                timeline, impact,
+                status as "status: ReportStatus",
+                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
+            FROM reports
+            WHERE user_id = $1
+            ORDER BY created_at DESC
             "#,
             user_id
         )
@@ -216,7 +360,8 @@ impl ReportService {
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
-                created_at, updated_at
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
             FROM reports
             WHERE cluster_id = $1
             ORDER BY created_at DESC
@@ -286,7 +431,8 @@ impl ReportService {
                 timeline, impact,
                 status as "status: ReportStatus",
                 verified_at, verified_by, resolved_at, resolved_by, resolution_notes,
-                created_at, updated_at
+                created_at, updated_at,
+                reference_number, adk_thread_id, user_id, platform
             "#,
             id,
             dto.status as ReportStatus,
