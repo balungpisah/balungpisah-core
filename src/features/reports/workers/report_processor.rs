@@ -8,7 +8,7 @@ use crate::core::error::{AppError, Result};
 use crate::features::reports::models::{CreateReportCategory, ReportJob, ReportJobStatus};
 use crate::features::reports::services::ExtractionService;
 use crate::features::reports::services::{
-    ClusteringService, GeocodingService, RegionLookupService, ReportJobService, ReportService,
+    GeocodingService, RegionLookupService, ReportJobService, ReportService,
 };
 
 /// Maximum retry attempts for failed jobs
@@ -30,7 +30,6 @@ pub struct ReportProcessor {
     pool: PgPool,
     extraction_service: Arc<ExtractionService>,
     geocoding_service: Arc<GeocodingService>,
-    clustering_service: Arc<ClusteringService>,
     report_service: Arc<ReportService>,
     report_job_service: Arc<ReportJobService>,
     region_lookup_service: Arc<RegionLookupService>,
@@ -41,7 +40,6 @@ impl ReportProcessor {
         pool: PgPool,
         extraction_service: Arc<ExtractionService>,
         geocoding_service: Arc<GeocodingService>,
-        clustering_service: Arc<ClusteringService>,
         report_service: Arc<ReportService>,
         report_job_service: Arc<ReportJobService>,
         region_lookup_service: Arc<RegionLookupService>,
@@ -50,7 +48,6 @@ impl ReportProcessor {
             pool,
             extraction_service,
             geocoding_service,
-            clustering_service,
             report_service,
             report_job_service,
             region_lookup_service,
@@ -277,24 +274,8 @@ impl ReportProcessor {
                 resolved_regions.regency_id
             );
 
-            // Cluster by location if we have coordinates
-            if let (Some(lat), Some(lon)) = (create_location.lat, create_location.lon) {
-                let location_name = create_location
-                    .city
-                    .as_ref()
-                    .or(create_location.suburb.as_ref())
-                    .map(|s| s.as_str());
-
-                let cluster_id = self
-                    .clustering_service
-                    .find_or_create_cluster(lat, lon, location_name)
-                    .await?;
-
-                self.report_service
-                    .set_cluster(report.id, cluster_id)
-                    .await?;
-                tracing::info!("Assigned report {} to cluster {}", report.id, cluster_id);
-            }
+            // NOTE: Geographic clustering disabled - use regional hierarchy instead
+            // (province_id, regency_id, district_id, village_id in report_locations)
         }
 
         // Copy attachments from thread to report

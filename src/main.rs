@@ -257,11 +257,11 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         // See: citizen_report_agent -> ReportProcessor workflow
 
         // Spawn Report Processor Worker (new workflow)
+        // NOTE: Clustering disabled - reports use regional hierarchy instead
         let report_processor = ReportProcessor::new(
             pool.clone(),
             Arc::clone(&extraction_svc),
             Arc::clone(&geocoding_service),
-            Arc::clone(&clustering_service),
             Arc::clone(&report_service),
             Arc::clone(&report_job_service),
             Arc::clone(&region_lookup_service),
