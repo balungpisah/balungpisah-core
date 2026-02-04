@@ -65,6 +65,9 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
+    // Load .env file BEFORE initializing logger so RUST_LOG is available
+    let _ = dotenvy::dotenv();
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),

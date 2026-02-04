@@ -22,13 +22,22 @@ impl RegionLookupService {
         Self { pool }
     }
 
-    /// Resolve city and state names to region IDs
+    /// Resolve location names to region IDs
     ///
-    /// Uses fuzzy matching with ILIKE to find the best match
+    /// Uses fuzzy matching with ILIKE to find the best match.
+    /// Resolves the full hierarchy: province → regency → district → village
+    ///
+    /// # Arguments
+    /// * `city` - City/Regency/Kabupaten name
+    /// * `state` - Province name
+    /// * `district` - District/Kecamatan name (optional)
+    /// * `village` - Village/Desa/Kelurahan name (optional)
     pub async fn resolve(
         &self,
         city: Option<&str>,
         state: Option<&str>,
+        district: Option<&str>,
+        village: Option<&str>,
     ) -> Result<ResolvedRegions> {
         let mut result = ResolvedRegions::default();
 
@@ -50,6 +59,88 @@ impl RegionLookupService {
                 }
             }
         }
+
+        // Try to resolve district from municipality/kecamatan name
+        if let Some(district_name) = district {
+            if let Some((district_id, regency_id)) =
+                self.find_district(district_name, result.regency_id).await?
+            {
+                result.district_id = Some(district_id);
+                // If we found a district but didn't have a regency, use the district's regency
+                if result.regency_id.is_none() {
+                    result.regency_id = Some(regency_id);
+                    // Also try to get the province from the regency
+                    if result.province_id.is_none() {
+                        result.province_id = self.get_province_from_regency(regency_id).await?;
+                    }
+                }
+            }
+        }
+
+        // Try to resolve village from desa/kelurahan name
+        if let Some(village_name) = village {
+            if let Some((village_id, district_id)) =
+                self.find_village(village_name, result.district_id).await?
+            {
+                result.village_id = Some(village_id);
+                // If we found a village but didn't have a district, use the village's district
+                if result.district_id.is_none() {
+                    result.district_id = Some(district_id);
+                    // Also try to backfill regency and province
+                    if result.regency_id.is_none() {
+                        if let Some(regency_id) =
+                            self.get_regency_from_district(district_id).await?
+                        {
+                            result.regency_id = Some(regency_id);
+                            if result.province_id.is_none() {
+                                result.province_id =
+                                    self.get_province_from_regency(regency_id).await?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        tracing::debug!(
+            "Resolved regions: province={:?}, regency={:?}, district={:?}, village={:?}",
+            result.province_id,
+            result.regency_id,
+            result.district_id,
+            result.village_id
+        );
+
+        Ok(result)
+    }
+
+    /// Get province ID from regency ID
+    async fn get_province_from_regency(&self, regency_id: Uuid) -> Result<Option<Uuid>> {
+        let result = sqlx::query_scalar!(
+            r#"SELECT province_id FROM regencies WHERE id = $1"#,
+            regency_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get province from regency: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        Ok(result)
+    }
+
+    /// Get regency ID from district ID
+    async fn get_regency_from_district(&self, district_id: Uuid) -> Result<Option<Uuid>> {
+        let result = sqlx::query_scalar!(
+            r#"SELECT regency_id FROM districts WHERE id = $1"#,
+            district_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get regency from district: {:?}", e);
+            AppError::Database(e)
+        })?;
 
         Ok(result)
     }
@@ -181,8 +272,7 @@ impl RegionLookupService {
     }
 
     /// Find district by name within a regency
-    #[allow(dead_code)]
-    pub async fn find_district(
+    async fn find_district(
         &self,
         name: &str,
         regency_id: Option<Uuid>,
@@ -254,8 +344,7 @@ impl RegionLookupService {
     }
 
     /// Find village by name within a district
-    #[allow(dead_code)]
-    pub async fn find_village(
+    async fn find_village(
         &self,
         name: &str,
         district_id: Option<Uuid>,

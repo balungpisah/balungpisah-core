@@ -21,20 +21,83 @@ Classify intent: `report`, `complaint`, `proposal`, `inquiry`, `appreciation`
 - **timeline**: When the issue started or occurred
 - **impact**: Who or how many are affected
 
-## Location (Critical for Geocoding)
+### Scope Classification
 
-- **location_raw**: Exact location as mentioned by user (verbatim)
-- **location_query**: Formatted for geocoding — "Street near Landmark, City"
-- **location_street**: Street/road name only (Jalan, Gang, Lorong)
-- **location_city**: City/regency name (remove "Kota"/"Kabupaten" prefix)
-- **location_state**: Province name (infer from city if not mentioned)
+Determine if the issue is **national** or **regional**, and if regional, what **type**:
+
+**National issues**:
+- Affect the entire country, handled by central government
+- Examples: National policies, federal regulations, constitutional matters, nationwide programs
+- Location: NOT needed
+
+**Regional issues - Type A: Physical/Infrastructure** (location-specific)
+- Affect a specific physical location
+- Examples: Potholes, damaged roads, garbage piles, broken streetlights, illegal dumping
+- Location: REQUIRED and DETAILED (street + village/district + regency + province)
+
+**Regional issues - Type B: Policy/Economic/Regulatory** (region-wide)
+- Affect an entire region (province or regency)
+- Examples: Minimum wage, regional regulations, licensing policies, tax policies, education/health policies
+- Location: MINIMAL (regency OR province only - NO street/village/district needed)
+
+**Regional issues - Type C: Service/Facility** (facility-specific)
+- Affect a specific institution or facility
+- Examples: Hospital complaints, school problems, government office issues
+- Location: MODERATE (facility name + regency + province - street optional)
+
+## Location Extraction
+
+Location is structured hierarchically for Indonesia's administrative regions and geocoding.
+
+### Location Fields
+
+- **location_raw**: Exact verbatim text as user mentioned the location (always extract if mentioned)
+- **location_street**: Street name only (e.g., "Jalan Sudirman", "Gang Melati"). Saved but NOT used for geocoding
+- **location_village**: Desa/Kelurahan name. VALIDATE it belongs to the district. Remove "Desa"/"Kelurahan" prefix. Example: "Cisurupan", "Tegallega"
+- **location_district**: Kecamatan name. VALIDATE it belongs to the regency. Remove "Kecamatan" prefix. Example: "Cibiru", "Bogor Tengah"
+- **location_regency**: Kabupaten/Kota name. CRITICAL for geocoding. Remove "Kabupaten"/"Kota" prefix. Example: "Bandung", "Bogor", "Jakarta"
+- **location_province**: Provinsi name. Infer from regency if not mentioned. Example: "Jawa Barat", "Sumatera Utara", "DI Yogyakarta"
+
+### Location Extraction Strategy Based on Issue Type
+
+**For Physical/Infrastructure Issues (Type A):**
+- Extract ALL available location fields (street, village, district, regency, province)
+- Minimum viable: Regency + Province
+- Ideal: Street + Village + District + Regency + Province
+
+**For Policy/Economic Issues (Type B):**
+- Extract ONLY: `location_regency` and/or `location_province`
+- Set street, village, district to NULL (not needed for region-wide policies)
+- Example: UMR complaint → `location_province: "Daerah Istimewa Yogyakarta"`, all others NULL
+
+**For Service/Facility Issues (Type C):**
+- Extract: `location_regency` and `location_province` (REQUIRED)
+- Extract: `location_street` if mentioned (OPTIONAL)
+- Village/district usually NULL unless explicitly mentioned
+
+### Geocoding Strategy (for Type A only)
+
+The system uses **cascading geocoding** with these queries in order:
+1. "Village, District" (most specific)
+2. "District, Regency"
+3. "Regency, Province" (minimum required)
+
+**Important:**
+- Street names are NOT used for geocoding (unreliable in OpenStreetMap)
+- Remove administrative prefixes (Kabupaten, Kota, Kecamatan, Desa, Kelurahan)
+- Validate hierarchy: Village belongs to District, District belongs to Regency, Regency belongs to Province
 
 ## Guidelines
 
 1. Only extract what's explicitly mentioned or clearly inferable
 2. Use valid category slugs from the list above
-3. Null for unknown — don't guess
-4. Location priority: Street + City + Province ideal; City minimum
+3. Null for unknown — don't guess or make up location data
+4. **Be smart about location needs**:
+   - Physical problems → detailed location needed
+   - Policy complaints → only region name (province/regency)
+   - Service issues → facility + city + province
+5. **For national issues**: All location fields are NULL
+6. **If user mentions a region (province/regency) for a policy issue**: Extract that region but leave street/village/district as NULL
 
 ## Output
 

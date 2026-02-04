@@ -62,30 +62,33 @@ pub struct ExtractedReportData {
     #[schemars(description = "Who or how many people are affected")]
     pub impact: Option<String>,
 
-    #[schemars(
-        description = "Raw location description from the user (address, landmark, area name)"
-    )]
+    #[schemars(description = "Exact verbatim text of location as user mentioned it")]
     pub location_raw: Option<String>,
 
     #[schemars(
-        description = "Structured query for geocoding - combines street name with nearby landmark (e.g., 'Jalan Tunjungan dekat Tugu Pahlawan, Surabaya')"
-    )]
-    pub location_query: Option<String>,
-
-    #[schemars(
-        description = "Street name extracted from location (e.g., 'Jalan Pemuda', 'Gang Melati')"
+        description = "Street name (saved but NOT used for geocoding). Example: 'Jalan Sudirman', 'Gang Mawar'"
     )]
     pub location_street: Option<String>,
 
     #[schemars(
-        description = "City or kabupaten name (e.g., 'Surabaya', 'Kabupaten Sidoarjo', 'Kota Malang')"
+        description = "Desa/Kelurahan name. VALIDATE it belongs to the district. Remove 'Desa'/'Kelurahan' prefix. Example: 'Cisurupan', 'Tegallega'"
     )]
-    pub location_city: Option<String>,
+    pub location_village: Option<String>,
 
     #[schemars(
-        description = "Province/state name (e.g., 'Jawa Timur', 'DKI Jakarta', 'Jawa Barat')"
+        description = "Kecamatan name. VALIDATE it belongs to the regency. Remove 'Kecamatan' prefix. Example: 'Cibiru', 'Bogor Tengah'"
     )]
-    pub location_state: Option<String>,
+    pub location_district: Option<String>,
+
+    #[schemars(
+        description = "Kabupaten/Kota name. CRITICAL for geocoding. Remove 'Kabupaten'/'Kota' prefix. Example: 'Bandung', 'Bogor', 'Jakarta'"
+    )]
+    pub location_regency: Option<String>,
+
+    #[schemars(
+        description = "Provinsi name. Infer from regency if not mentioned. Example: 'Jawa Tengah', 'Sumatera Barat', 'DI Yogyakarta'"
+    )]
+    pub location_province: Option<String>,
 
     /// Whether the LLM extraction was successful
     #[serde(default = "default_true")]
@@ -345,25 +348,24 @@ mod tests {
             "tag_type": "report",
             "timeline": "Sudah 2 minggu",
             "impact": "Banyak pengendara motor jatuh",
-            "location_raw": "di depan warung Bu Sri, Jalan Tunjungan, Surabaya",
-            "location_query": "Jalan Tunjungan dekat warung Bu Sri, Surabaya",
-            "location_street": "Jalan Tunjungan",
-            "location_city": "Surabaya",
-            "location_state": "Jawa Timur"
+            "location_raw": "di depan toko swalayan, Jalan Merdeka, Bandung",
+            "location_street": "Jalan Merdeka",
+            "location_village": "Cisurupan",
+            "location_district": "Cibiru",
+            "location_regency": "Bandung",
+            "location_province": "Jawa Barat"
         }"#;
 
         let data: ExtractedReportData = serde_json::from_str(json).unwrap();
         assert_eq!(
             data.location_raw,
-            Some("di depan warung Bu Sri, Jalan Tunjungan, Surabaya".to_string())
+            Some("di depan toko swalayan, Jalan Merdeka, Bandung".to_string())
         );
-        assert_eq!(
-            data.location_query,
-            Some("Jalan Tunjungan dekat warung Bu Sri, Surabaya".to_string())
-        );
-        assert_eq!(data.location_street, Some("Jalan Tunjungan".to_string()));
-        assert_eq!(data.location_city, Some("Surabaya".to_string()));
-        assert_eq!(data.location_state, Some("Jawa Timur".to_string()));
+        assert_eq!(data.location_street, Some("Jalan Merdeka".to_string()));
+        assert_eq!(data.location_village, Some("Cisurupan".to_string()));
+        assert_eq!(data.location_district, Some("Cibiru".to_string()));
+        assert_eq!(data.location_regency, Some("Bandung".to_string()));
+        assert_eq!(data.location_province, Some("Jawa Barat".to_string()));
     }
 
     #[test]
@@ -376,20 +378,22 @@ mod tests {
             "timeline": null,
             "impact": null,
             "location_raw": null,
-            "location_query": null,
             "location_street": null,
-            "location_city": null,
-            "location_state": null
+            "location_village": null,
+            "location_district": null,
+            "location_regency": null,
+            "location_province": null
         }"#;
 
         let data: ExtractedReportData = serde_json::from_str(json).unwrap();
         assert_eq!(data.title, "Test Report");
         assert!(data.categories.is_empty());
         assert!(data.tag_type.is_none());
-        assert!(data.location_query.is_none());
         assert!(data.location_street.is_none());
-        assert!(data.location_city.is_none());
-        assert!(data.location_state.is_none());
+        assert!(data.location_village.is_none());
+        assert!(data.location_district.is_none());
+        assert!(data.location_regency.is_none());
+        assert!(data.location_province.is_none());
     }
 
     #[test]
@@ -469,12 +473,13 @@ mod tests {
         assert!(schema.contains("categories"));
         assert!(schema.contains("tag_type"));
 
-        // Should contain new location fields
+        // Should contain location fields
         assert!(schema.contains("location_raw"));
-        assert!(schema.contains("location_query"));
         assert!(schema.contains("location_street"));
-        assert!(schema.contains("location_city"));
-        assert!(schema.contains("location_state"));
+        assert!(schema.contains("location_village"));
+        assert!(schema.contains("location_district"));
+        assert!(schema.contains("location_regency"));
+        assert!(schema.contains("location_province"));
 
         // Should NOT contain internal fields (marked with #[schemars(skip)])
         assert!(!schema.contains("is_llm_success"));
@@ -507,10 +512,11 @@ mod tests {
 
         // Should contain location extraction instructions
         assert!(prompt.contains("Location"));
-        assert!(prompt.contains("location_query"));
         assert!(prompt.contains("location_street"));
-        assert!(prompt.contains("location_city"));
-        assert!(prompt.contains("location_state"));
+        assert!(prompt.contains("location_village"));
+        assert!(prompt.contains("location_district"));
+        assert!(prompt.contains("location_regency"));
+        assert!(prompt.contains("location_province"));
     }
 
     #[test]
