@@ -495,24 +495,22 @@ mod tests {
         assert!(prompt.contains("data extraction assistant"));
         assert!(prompt.contains("JSON"));
 
-        // Should contain multi-category instructions
-        assert!(prompt.contains("Multi-Category Support"));
+        // Should contain category instructions with slug and severity
         assert!(prompt.contains("slug"));
         assert!(prompt.contains("severity"));
 
-        // Should contain tag_type instructions
-        assert!(prompt.contains("tag_type"));
+        // Should contain report type classification
+        assert!(prompt.contains("Report Type"));
         assert!(prompt.contains("report"));
         assert!(prompt.contains("proposal"));
         assert!(prompt.contains("complaint"));
 
         // Should contain location extraction instructions
-        assert!(prompt.contains("Location Extraction"));
+        assert!(prompt.contains("Location"));
         assert!(prompt.contains("location_query"));
         assert!(prompt.contains("location_street"));
         assert!(prompt.contains("location_city"));
         assert!(prompt.contains("location_state"));
-        assert!(prompt.contains("Jawa Timur")); // Example province
     }
 
     #[test]

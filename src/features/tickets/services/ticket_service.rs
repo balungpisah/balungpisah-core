@@ -18,6 +18,8 @@ impl TicketService {
     }
 
     /// Generate a reference number in format: TKT-YYYY-NNNNNNN
+    /// (kept for reference - ticket creation disabled)
+    #[allow(dead_code)]
     async fn generate_reference_number(&self) -> Result<String> {
         let year = Utc::now().format("%Y").to_string();
 
@@ -34,7 +36,8 @@ impl TicketService {
         Ok(format!("TKT-{}-{:07}", year, seq))
     }
 
-    /// Create a ticket from agent tool call
+    /// Create a ticket from agent tool call (kept for reference - ticket creation disabled)
+    #[allow(dead_code)]
     pub async fn create_from_agent(
         &self,
         adk_thread_id: Uuid,

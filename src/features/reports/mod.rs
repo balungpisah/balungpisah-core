@@ -6,6 +6,7 @@ pub mod services;
 pub mod workers;
 
 pub use services::{
-    ClusteringService, GeocodingService, RegionLookupService, ReportJobService, ReportService,
+    ClusteringService, ExtractionService, GeocodingService, RegionLookupService, ReportJobService,
+    ReportService,
 };
 pub use workers::ReportProcessor;

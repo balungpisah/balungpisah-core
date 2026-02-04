@@ -6,10 +6,10 @@ use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
 use crate::features::reports::models::{CreateReportCategory, ReportJob, ReportJobStatus};
+use crate::features::reports::services::ExtractionService;
 use crate::features::reports::services::{
     ClusteringService, GeocodingService, RegionLookupService, ReportJobService, ReportService,
 };
-use crate::features::tickets::services::ExtractionService;
 
 /// Maximum retry attempts for failed jobs
 const MAX_RETRIES: i32 = 3;

@@ -3,7 +3,8 @@ pub mod handlers;
 pub mod models;
 pub mod routes;
 pub mod services;
-pub mod workers;
+// NOTE: workers module kept for reference but TicketProcessor is disabled
+// The ticket workflow has been replaced by direct report creation via citizen_report_agent
+mod workers;
 
-pub use services::{ExtractionService, TicketService};
-pub use workers::TicketProcessor;
+pub use services::TicketService;

@@ -49,8 +49,9 @@ pub struct CreateTicketFromAgentDto {
     pub platform: Option<String>,
 }
 
-/// Simplified response for agent tool
+/// Simplified response for agent tool (kept for reference - ticket creation disabled)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct TicketCreatedDto {
     pub reference_number: String,
     pub ticket_id: Uuid,

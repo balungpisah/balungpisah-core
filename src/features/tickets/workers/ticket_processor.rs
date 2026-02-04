@@ -6,11 +6,11 @@ use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
 use crate::features::reports::models::{CreateReport, CreateReportCategory};
+use crate::features::reports::services::ExtractionService;
 use crate::features::reports::services::{
     ClusteringService, GeocodingService, RegionLookupService, ReportService,
 };
 use crate::features::tickets::models::{Ticket, TicketStatus};
-use crate::features::tickets::services::ExtractionService;
 
 /// Maximum retry attempts for failed tickets
 const MAX_RETRIES: i32 = 3;

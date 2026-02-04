@@ -26,12 +26,10 @@ use crate::features::rate_limits::{
 };
 use crate::features::regions::{routes as regions_routes, RegionService};
 use crate::features::reports::{
-    routes as reports_routes, ClusteringService, GeocodingService, RegionLookupService,
-    ReportJobService, ReportProcessor, ReportService,
+    routes as reports_routes, ClusteringService, ExtractionService, GeocodingService,
+    RegionLookupService, ReportJobService, ReportProcessor, ReportService,
 };
-use crate::features::tickets::{
-    routes as tickets_routes, ExtractionService, TicketProcessor, TicketService,
-};
+use crate::features::tickets::{routes as tickets_routes, TicketService};
 use crate::features::users::{
     clients::logto::LogtoUserProfileClient, routes as users_routes, services::UserProfileService,
 };
@@ -254,19 +252,9 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
 
     // Spawn background processor workers (if extraction service is available)
     if let Some(extraction_svc) = extraction_service {
-        // Spawn Ticket Processor Worker (legacy - for existing tickets)
-        let ticket_processor = TicketProcessor::new(
-            pool.clone(),
-            Arc::clone(&extraction_svc),
-            Arc::clone(&geocoding_service),
-            Arc::clone(&clustering_service),
-            Arc::clone(&report_service),
-            Arc::clone(&region_lookup_service),
-        );
-        tokio::spawn(async move {
-            ticket_processor.run().await;
-        });
-        tracing::info!("Ticket processor worker spawned");
+        // NOTE: TicketProcessor disabled - ticket workflow replaced by direct report creation
+        // The ticket feature is kept for historical data but no longer processes new tickets.
+        // See: citizen_report_agent -> ReportProcessor workflow
 
         // Spawn Report Processor Worker (new workflow)
         let report_processor = ReportProcessor::new(
