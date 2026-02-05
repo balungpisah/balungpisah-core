@@ -21,6 +21,7 @@ use crate::features::dashboard::{routes as dashboard_routes, DashboardService};
 use crate::features::expectations::{routes as expectations_routes, ExpectationService};
 use crate::features::files::{routes as files_routes, FileService};
 use crate::features::logto::token_manager::LogtoTokenManager;
+use crate::features::prompts::{routes as prompts_routes, PromptService};
 use crate::features::rate_limits::{
     routes as rate_limits_routes, RateLimitConfigService, RateLimitService,
 };
@@ -174,6 +175,14 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     // Initialize Category Service
     let category_service = Arc::new(CategoryService::new(pool.clone()));
     tracing::info!("Category service initialized");
+
+    // Initialize Prompt Service
+    let prompt_service = Arc::new(PromptService::new(pool.clone()));
+    tracing::info!("Prompt service initialized");
+
+    // Initialize global prompt service for rendering engine
+    shared::prompts::engine::init_prompt_service(Arc::clone(&prompt_service));
+    tracing::info!("Global prompt service initialized for template engine");
 
     // Initialize Ticket Service
     let ticket_service = Arc::new(TicketService::new(pool.clone()));
@@ -343,6 +352,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(rate_limits_routes::admin_routes(Arc::clone(
             &rate_limit_config_service,
         )))
+        .merge(prompts_routes::admin_routes(Arc::clone(&prompt_service)))
         .nest(
             "/api/admin",
             admin_routes::routes(Arc::clone(&admin_service)),

@@ -65,17 +65,18 @@ impl AgentRuntimeService {
     }
 
     /// Build an agent instance for a chat session
-    fn build_agent(&self) -> Result<Agent<PostgresStorage>> {
-        self.build_agent_with_context(None)
+    async fn build_agent(&self) -> Result<Agent<PostgresStorage>> {
+        self.build_agent_with_context(None).await
     }
 
     /// Build an agent instance with optional attachment context
-    fn build_agent_with_context(
+    async fn build_agent_with_context(
         &self,
         attachment_context: Option<&str>,
     ) -> Result<Agent<PostgresStorage>> {
         // Render system prompt from template with dynamic context
         let system_prompt = render_citizen_report_agent_prompt(attachment_context)
+            .await
             .map_err(|e| AppError::Internal(format!("Failed to render prompt template: {}", e)))?;
 
         AgentBuilder::new()
@@ -98,7 +99,7 @@ impl AgentRuntimeService {
         external_id: &str,
         thread_id: Option<Uuid>,
     ) -> Result<balungpisah_adk::Thread> {
-        let agent = self.build_agent()?;
+        let agent = self.build_agent().await?;
 
         if let Some(tid) = thread_id {
             // Verify thread exists and belongs to this user
@@ -132,7 +133,7 @@ impl AgentRuntimeService {
         attachment_context: Option<&str>,
     ) -> Result<(Uuid, String, Uuid)> {
         let thread = self.get_or_create_thread(external_id, thread_id).await?;
-        let agent = self.build_agent_with_context(attachment_context)?;
+        let agent = self.build_agent_with_context(attachment_context).await?;
 
         let response = agent
             .chat(thread.id, content)
@@ -169,7 +170,7 @@ impl AgentRuntimeService {
         content: MessageContent,
         attachment_context: Option<&str>,
     ) -> Result<(Uuid, mpsc::Receiver<String>)> {
-        let agent = self.build_agent_with_context(attachment_context)?;
+        let agent = self.build_agent_with_context(attachment_context).await?;
 
         // Build the chat request with full lifecycle support
         let mut request = ChatRequest::new(content);

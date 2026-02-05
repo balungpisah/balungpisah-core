@@ -11,6 +11,7 @@ use crate::features::contributors::{dtos as contributors_dtos, handlers as contr
 use crate::features::dashboard::{dtos as dashboard_dtos, handlers as dashboard_handlers};
 use crate::features::expectations::{dtos as expectations_dtos, handlers as expectations_handlers};
 use crate::features::files::{dtos as files_dtos, handlers as files_handlers};
+use crate::features::prompts::{dtos as prompts_dtos, handlers as prompts_handlers};
 use crate::features::rate_limits::{dtos as rate_limits_dtos, handlers as rate_limits_handlers};
 use crate::features::regions::{dtos as regions_dtos, handlers as regions_handlers};
 use crate::features::reports::{
@@ -75,6 +76,12 @@ use crate::shared::types::{ApiResponse, Meta};
         rate_limits_handlers::rate_limit_config_handler::list_rate_limit_configs,
         rate_limits_handlers::rate_limit_config_handler::get_rate_limit_config,
         rate_limits_handlers::rate_limit_config_handler::update_rate_limit_config,
+        // Prompts (Super Admin)
+        prompts_handlers::prompt_handler::create_prompt,
+        prompts_handlers::prompt_handler::get_prompt,
+        prompts_handlers::prompt_handler::list_prompts,
+        prompts_handlers::prompt_handler::update_prompt,
+        prompts_handlers::prompt_handler::delete_prompt,
         // Admin
         admin_handlers::list_expectations,
         admin_handlers::get_expectation,
@@ -188,6 +195,13 @@ use crate::shared::types::{ApiResponse, Meta};
             ApiResponse<Vec<rate_limits_dtos::RateLimitConfigResponseDto>>,
             ApiResponse<rate_limits_dtos::RateLimitConfigResponseDto>,
             ApiResponse<rate_limits_dtos::UserRateLimitStatusDto>,
+            // Prompts
+            prompts_dtos::CreatePromptDto,
+            prompts_dtos::UpdatePromptDto,
+            prompts_dtos::PromptResponseDto,
+            prompts_dtos::PromptQueryParams,
+            ApiResponse<prompts_dtos::PromptResponseDto>,
+            ApiResponse<Vec<prompts_dtos::PromptResponseDto>>,
             // Reports
             reports_models::ReportStatus,
             reports_models::ReportSeverity,

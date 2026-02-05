@@ -17,7 +17,7 @@
 //! let prompt = render_template_simple("citizen_report_agent/system.jinja", &ctx)?;
 //! ```
 
-mod engine;
+pub mod engine;
 
 pub use engine::{render_template, TemplateError};
 
@@ -60,7 +60,7 @@ pub fn datetime_context() -> HashMap<&'static str, String> {
 ///
 /// # Returns
 /// The rendered system prompt with current datetime and optional attachments.
-pub fn render_citizen_report_agent_prompt(
+pub async fn render_citizen_report_agent_prompt(
     attachments: Option<&str>,
 ) -> Result<String, TemplateError> {
     let datetime = datetime_context();
@@ -75,7 +75,7 @@ pub fn render_citizen_report_agent_prompt(
     ctx.insert("attachments", Value::from(attachments.unwrap_or("")));
     ctx.insert("has_attachments", Value::from(attachments.is_some()));
 
-    render_template("citizen_report_agent/system.jinja", &ctx)
+    render_template("citizen_report_agent/system.jinja", &ctx).await
 }
 
 /// Render the extraction service system prompt.
@@ -86,7 +86,7 @@ pub fn render_citizen_report_agent_prompt(
 ///
 /// # Returns
 /// The rendered system prompt with dynamic categories and schema.
-pub fn render_extraction_prompt(
+pub async fn render_extraction_prompt(
     category_list: &str,
     json_schema: &str,
 ) -> Result<String, TemplateError> {
@@ -94,5 +94,5 @@ pub fn render_extraction_prompt(
     ctx.insert("category_list", Value::from(category_list));
     ctx.insert("json_schema", Value::from(json_schema));
 
-    render_template("extraction/system.jinja", &ctx)
+    render_template("extraction/system.jinja", &ctx).await
 }
