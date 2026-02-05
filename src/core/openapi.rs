@@ -83,6 +83,7 @@ use crate::shared::types::{ApiResponse, Meta};
         prompts_handlers::prompt_handler::update_prompt,
         prompts_handlers::prompt_handler::delete_prompt,
         prompts_handlers::prompt_handler::restore_prompt,
+        prompts_handlers::prompt_handler::list_keys,
         // Admin
         admin_handlers::list_expectations,
         admin_handlers::get_expectation,
@@ -203,6 +204,8 @@ use crate::shared::types::{ApiResponse, Meta};
             prompts_dtos::PromptQueryParams,
             ApiResponse<prompts_dtos::PromptResponseDto>,
             ApiResponse<Vec<prompts_dtos::PromptResponseDto>>,
+            prompts_dtos::PromptKeyDefinition,
+            ApiResponse<Vec<prompts_dtos::PromptKeyDefinition>>,
             // Reports
             reports_models::ReportStatus,
             reports_models::ReportSeverity,

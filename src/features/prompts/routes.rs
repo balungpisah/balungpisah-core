@@ -11,6 +11,7 @@ pub fn admin_routes(service: Arc<PromptService>) -> Router {
     Router::new()
         .route("/api/admin/prompts", post(handlers::create_prompt))
         .route("/api/admin/prompts", get(handlers::list_prompts))
+        .route("/api/admin/prompts/keys", get(handlers::list_keys))
         .route(
             "/api/admin/prompts/{id}",
             get(handlers::get_prompt)

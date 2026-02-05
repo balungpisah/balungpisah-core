@@ -3,6 +3,7 @@ use crate::features::prompts::dtos::{
     CreatePromptDto, PromptQueryParams, PromptResponseDto, UpdatePromptDto,
 };
 use crate::features::prompts::models::Prompt;
+use crate::features::prompts::registry::{get_all_prompt_keys, is_valid_prompt_key};
 use minijinja::Environment;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -126,6 +127,16 @@ impl PromptService {
 
     /// Create a new prompt
     pub async fn create(&self, dto: CreatePromptDto) -> Result<PromptResponseDto> {
+        // Validate prompt key against the registry
+        if !is_valid_prompt_key(&dto.key) {
+            let valid_keys: Vec<&str> = get_all_prompt_keys().iter().map(|k| k.key).collect();
+            return Err(AppError::Validation(format!(
+                "Invalid prompt key '{}'. Valid keys are: {}",
+                dto.key,
+                valid_keys.join(", ")
+            )));
+        }
+
         // Validate template compilation before saving
         validate_template_compilation(&dto.template_content)?;
 
