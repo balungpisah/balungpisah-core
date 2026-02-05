@@ -82,6 +82,7 @@ use crate::shared::types::{ApiResponse, Meta};
         prompts_handlers::prompt_handler::list_prompts,
         prompts_handlers::prompt_handler::update_prompt,
         prompts_handlers::prompt_handler::delete_prompt,
+        prompts_handlers::prompt_handler::restore_prompt,
         // Admin
         admin_handlers::list_expectations,
         admin_handlers::get_expectation,

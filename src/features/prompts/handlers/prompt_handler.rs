@@ -124,6 +124,34 @@ pub async fn update_prompt(
     Ok(Json(ApiResponse::success(Some(prompt), None, None)))
 }
 
+/// Restore a soft-deleted prompt (super admin only)
+#[utoipa::path(
+    post,
+    path = "/api/admin/prompts/{id}/restore",
+    params(
+        ("id" = Uuid, Path, description = "Prompt ID")
+    ),
+    responses(
+        (status = 200, description = "Prompt restored successfully", body = ApiResponse<PromptResponseDto>),
+        (status = 400, description = "Prompt is already active"),
+        (status = 404, description = "Prompt not found"),
+        (status = 409, description = "Active prompt with same key already exists"),
+        (status = 403, description = "Forbidden - super admin only")
+    ),
+    tag = "prompts",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn restore_prompt(
+    RequireSuperAdmin(_user): RequireSuperAdmin,
+    State(service): State<Arc<PromptService>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ApiResponse<PromptResponseDto>>> {
+    let prompt = service.restore(id).await?;
+    Ok(Json(ApiResponse::success(Some(prompt), None, None)))
+}
+
 /// Delete a prompt (soft delete, super admin only)
 #[utoipa::path(
     delete,

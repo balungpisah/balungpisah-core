@@ -338,6 +338,70 @@ impl PromptService {
         Ok(())
     }
 
+    /// Restore a soft-deleted prompt
+    pub async fn restore(&self, id: Uuid) -> Result<PromptResponseDto> {
+        // Fetch the prompt first to check its state and key
+        let prompt = sqlx::query_as!(
+            Prompt,
+            r#"
+            SELECT id, key, name, description, template_content,
+                   variables as "variables: serde_json::Value",
+                   version, is_active, created_at, updated_at, created_by, updated_by
+            FROM prompts
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::Database)?
+        .ok_or_else(|| AppError::NotFound(format!("Prompt with id {} not found", id)))?;
+
+        if prompt.is_active {
+            return Err(AppError::BadRequest(
+                "Prompt is already active.".to_string(),
+            ));
+        }
+
+        // Check if another active prompt with the same key exists
+        let conflict = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM prompts WHERE key = $1 AND is_active = true) as "exists!""#,
+            prompt.key
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        if conflict {
+            return Err(AppError::Conflict(format!(
+                "An active prompt with key '{}' already exists. Delete or update it before restoring this one.",
+                prompt.key
+            )));
+        }
+
+        // Restore the prompt
+        let restored = sqlx::query_as!(
+            Prompt,
+            r#"
+            UPDATE prompts
+            SET is_active = true, version = version + 1, updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, key, name, description, template_content,
+                      variables as "variables: serde_json::Value",
+                      version, is_active, created_at, updated_at, created_by, updated_by
+            "#,
+            id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        // Invalidate cache
+        self.invalidate_cache().await;
+
+        Ok(PromptResponseDto::from(restored))
+    }
+
     /// Clear the cache
     async fn invalidate_cache(&self) {
         let mut cache_write = self.cache.write().await;
