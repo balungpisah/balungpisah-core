@@ -17,5 +17,9 @@ pub fn admin_routes(service: Arc<PromptService>) -> Router {
                 .put(handlers::update_prompt)
                 .delete(handlers::delete_prompt),
         )
+        .route(
+            "/api/admin/prompts/{id}/restore",
+            post(handlers::restore_prompt),
+        )
         .with_state(service)
 }
