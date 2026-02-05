@@ -7,7 +7,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 /// Regex for prompt key format: snake_case segments separated by `/`
-/// Examples: "citizen_report_agent/system", "extraction/system"
+/// Examples: "citizen_report_agent/system", "citizen_report_extraction/system"
 /// No .jinja extension, no leading/trailing slashes, no uppercase
 static PROMPT_KEY_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)+$").unwrap());
