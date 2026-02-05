@@ -3,20 +3,13 @@ use std::sync::Arc;
 use axum::{routing::get, Router};
 
 use crate::features::reports::handlers::{self, ReportState};
-use crate::features::reports::services::{ClusteringService, ReportService};
+use crate::features::reports::services::ReportService;
 
 /// Create routes for the reports feature
 ///
 /// Protected routes require authentication
-/// Cluster routes are public
-pub fn routes(
-    report_service: Arc<ReportService>,
-    clustering_service: Arc<ClusteringService>,
-) -> Router {
-    let state = ReportState {
-        report_service,
-        clustering_service,
-    };
+pub fn routes(report_service: Arc<ReportService>) -> Router {
+    let state = ReportState { report_service };
 
     Router::new()
         // Protected routes (require auth middleware to be applied by caller)
@@ -26,8 +19,5 @@ pub fn routes(
             "/api/reports/{id}/status",
             axum::routing::patch(handlers::update_report_status),
         )
-        // Public routes
-        .route("/api/reports/clusters", get(handlers::list_clusters))
-        .route("/api/reports/clusters/{id}", get(handlers::get_cluster))
         .with_state(state)
 }

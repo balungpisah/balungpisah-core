@@ -17,9 +17,6 @@ use crate::features::regions::{dtos as regions_dtos, handlers as regions_handler
 use crate::features::reports::{
     dtos as reports_dtos, handlers as reports_handlers, models as reports_models,
 };
-use crate::features::tickets::{
-    dtos as tickets_dtos, handlers as tickets_handlers, models as tickets_models,
-};
 use crate::features::users::{dtos as users_dtos, handlers::profile_handler};
 use crate::shared::types::{ApiResponse, Meta};
 
@@ -57,10 +54,6 @@ use crate::shared::types::{ApiResponse, Meta};
         // Categories (public)
         categories_handlers::list_categories,
         categories_handlers::get_category,
-        // Tickets (protected)
-        tickets_handlers::list_tickets,
-        tickets_handlers::get_ticket,
-        tickets_handlers::get_ticket_by_reference,
         // Citizen Report Agent
         citizen_agent_handlers::chat_handler::chat_stream,
         citizen_agent_handlers::chat_handler::chat_sync,
@@ -91,14 +84,10 @@ use crate::shared::types::{ApiResponse, Meta};
         admin_handlers::get_report,
         admin_handlers::list_contributors,
         admin_handlers::get_contributor,
-        admin_handlers::list_tickets,
-        admin_handlers::get_ticket,
         // Reports
         reports_handlers::report_handler::list_reports,
         reports_handlers::report_handler::get_report,
         reports_handlers::report_handler::update_report_status,
-        reports_handlers::report_handler::list_clusters,
-        reports_handlers::report_handler::get_cluster,
         // Dashboard (public)
         dashboard_handlers::dashboard_handler::get_summary,
         dashboard_handlers::dashboard_handler::list_reports,
@@ -167,11 +156,6 @@ use crate::shared::types::{ApiResponse, Meta};
             categories_dtos::CategoryTreeDto,
             ApiResponse<Vec<categories_dtos::CategoryResponseDto>>,
             ApiResponse<categories_dtos::CategoryResponseDto>,
-            // Tickets
-            tickets_models::TicketStatus,
-            tickets_dtos::TicketResponseDto,
-            ApiResponse<Vec<tickets_dtos::TicketResponseDto>>,
-            ApiResponse<tickets_dtos::TicketResponseDto>,
             // Citizen Report Agent
             citizen_agent_dtos::ChatRequestDto,
             citizen_agent_dtos::ChatResponseDto,
@@ -210,21 +194,16 @@ use crate::shared::types::{ApiResponse, Meta};
             reports_models::ReportStatus,
             reports_models::ReportSeverity,
             reports_models::ReportTagType,
-            reports_models::ClusterStatus,
             reports_models::GeocodingSource,
             reports_dtos::ReportCategoryDto,
             reports_dtos::ReportTagDto,
             reports_dtos::ReportResponseDto,
             reports_dtos::ReportDetailResponseDto,
             reports_dtos::ReportLocationResponseDto,
-            reports_dtos::ReportClusterResponseDto,
-            reports_dtos::ClusterDetailResponseDto,
             reports_dtos::UpdateReportStatusDto,
             ApiResponse<Vec<reports_dtos::ReportResponseDto>>,
             ApiResponse<reports_dtos::ReportDetailResponseDto>,
             ApiResponse<reports_dtos::ReportResponseDto>,
-            ApiResponse<Vec<reports_dtos::ReportClusterResponseDto>>,
-            ApiResponse<reports_dtos::ClusterDetailResponseDto>,
             // Dashboard (public)
             dashboard_dtos::PaginationMeta,
             dashboard_dtos::ReportCategoryInfo,
@@ -257,7 +236,6 @@ use crate::shared::types::{ApiResponse, Meta};
             // Admin
             admin_dtos::SortDirection,
             admin_dtos::ReportSortBy,
-            admin_dtos::TicketSortBy,
             admin_dtos::AdminExpectationDto,
             admin_dtos::AdminReportDto,
             admin_dtos::AdminReportDetailDto,
@@ -266,16 +244,12 @@ use crate::shared::types::{ApiResponse, Meta};
             admin_dtos::AdminReportAttachmentDto,
             admin_dtos::AdminContributorDto,
             admin_dtos::AdminContributorDetailDto,
-            admin_dtos::AdminTicketDto,
-            admin_dtos::AdminTicketDetailDto,
             ApiResponse<Vec<admin_dtos::AdminExpectationDto>>,
             ApiResponse<admin_dtos::AdminExpectationDto>,
             ApiResponse<Vec<admin_dtos::AdminReportDto>>,
             ApiResponse<admin_dtos::AdminReportDetailDto>,
             ApiResponse<Vec<admin_dtos::AdminContributorDto>>,
             ApiResponse<admin_dtos::AdminContributorDetailDto>,
-            ApiResponse<Vec<admin_dtos::AdminTicketDto>>,
-            ApiResponse<admin_dtos::AdminTicketDetailDto>,
         )
     ),
     tags(
@@ -287,8 +261,7 @@ use crate::shared::types::{ApiResponse, Meta};
         (name = "contributors", description = "Contributor registration (public)"),
         (name = "citizen-report-agent", description = "AI-powered citizen report assistant"),
         (name = "categories", description = "Report categories (public)"),
-        (name = "tickets", description = "Citizen report tickets"),
-        (name = "reports", description = "Citizen reports and clusters"),
+        (name = "reports", description = "Citizen reports"),
         (name = "Dashboard", description = "Public dashboard for viewing reports"),
         (name = "rate-limits", description = "Rate limit configuration (admin only)"),
         (name = "admin", description = "Admin endpoints (super admin only)"),

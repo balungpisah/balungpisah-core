@@ -9,17 +9,15 @@ use crate::core::error::Result;
 use crate::core::extractor::AppJson;
 use crate::features::auth::model::AuthenticatedUser;
 use crate::features::reports::dtos::{
-    ClusterDetailResponseDto, ReportClusterResponseDto, ReportDetailResponseDto,
-    ReportLocationResponseDto, ReportResponseDto, UpdateReportStatusDto,
+    ReportDetailResponseDto, ReportLocationResponseDto, ReportResponseDto, UpdateReportStatusDto,
 };
-use crate::features::reports::services::{ClusteringService, ReportService};
+use crate::features::reports::services::ReportService;
 use crate::shared::types::ApiResponse;
 
 /// State for report handlers
 #[derive(Clone)]
 pub struct ReportState {
     pub report_service: Arc<ReportService>,
-    pub clustering_service: Arc<ClusteringService>,
 }
 
 /// List reports for the authenticated user
@@ -110,49 +108,4 @@ pub async fn update_report_status(
         .update_status(id, &dto, &user.sub)
         .await?;
     Ok(Json(ApiResponse::success(Some(report.into()), None, None)))
-}
-
-/// List active clusters (public)
-#[utoipa::path(
-    get,
-    path = "/api/reports/clusters",
-    responses(
-        (status = 200, description = "List of active clusters", body = ApiResponse<Vec<ReportClusterResponseDto>>)
-    ),
-    tag = "reports"
-)]
-pub async fn list_clusters(
-    State(state): State<ReportState>,
-) -> Result<Json<ApiResponse<Vec<ReportClusterResponseDto>>>> {
-    let clusters = state.clustering_service.list_active().await?;
-    let dtos: Vec<ReportClusterResponseDto> = clusters.into_iter().map(|c| c.into()).collect();
-    Ok(Json(ApiResponse::success(Some(dtos), None, None)))
-}
-
-/// Get cluster by ID with reports (public)
-#[utoipa::path(
-    get,
-    path = "/api/reports/clusters/{id}",
-    params(
-        ("id" = Uuid, Path, description = "Cluster ID")
-    ),
-    responses(
-        (status = 200, description = "Cluster found", body = ApiResponse<ClusterDetailResponseDto>),
-        (status = 404, description = "Cluster not found")
-    ),
-    tag = "reports"
-)]
-pub async fn get_cluster(
-    State(state): State<ReportState>,
-    Path(id): Path<uuid::Uuid>,
-) -> Result<Json<ApiResponse<ClusterDetailResponseDto>>> {
-    let cluster = state.clustering_service.get_by_id(id).await?;
-    let reports = state.report_service.list_by_cluster(id).await?;
-
-    let dto = ClusterDetailResponseDto {
-        cluster: cluster.into(),
-        reports: reports.into_iter().map(|r| r.into()).collect(),
-    };
-
-    Ok(Json(ApiResponse::success(Some(dto), None, None)))
 }

@@ -20,6 +20,24 @@ See [MIGRATIONS.md](./MIGRATIONS.md) for detailed guide.
 
 ---
 
+## Database Backup & Restore
+
+```bash
+# Create backup with timestamp
+make db-backup
+# Creates: backups/balungpisah_core_20260205_143022.sql
+
+# List available backups
+ls -lh backups/
+
+# Restore from backup
+make db-restore BACKUP_FILE=backups/balungpisah_core_20260205_143022.sql
+```
+
+**Tip**: Always create a backup before running risky migrations!
+
+---
+
 ## Testing
 
 ```bash
@@ -84,22 +102,25 @@ EOF
 ### Adding New Feature with Migration
 
 ```bash
-# 1. Create migration
+# 1. Create backup before migration (recommended!)
+make db-backup
+
+# 2. Create migration
 sqlx migrate add add_users_table
 
-# 2. Edit migrations/<timestamp>_add_users_table.sql
+# 3. Edit migrations/<timestamp>_add_users_table.sql
 # Write your SQL...
 
-# 3. Run migration (or start app)
+# 4. Run migration (or start app)
 cargo run
 
-# 4. Write code & tests
+# 5. Write code & tests
 # ...
 
-# 5. Run tests
+# 6. Run tests
 cargo test
 
-# 6. Commit
+# 7. Commit
 git add .
 git commit -m "feat: add users table"
 ```

@@ -1,11 +1,9 @@
-mod clustering_service;
 mod extraction_service;
 mod geocoding_service;
 mod region_lookup_service;
 mod report_job_service;
 mod report_service;
 
-pub use clustering_service::ClusteringService;
 pub use extraction_service::ExtractionService;
 pub use geocoding_service::{GeocodingLevel, GeocodingService, LocationNames};
 pub use region_lookup_service::RegionLookupService;

@@ -27,10 +27,9 @@ use crate::features::rate_limits::{
 };
 use crate::features::regions::{routes as regions_routes, RegionService};
 use crate::features::reports::{
-    routes as reports_routes, ClusteringService, ExtractionService, GeocodingService,
-    RegionLookupService, ReportJobService, ReportProcessor, ReportService,
+    routes as reports_routes, ExtractionService, GeocodingService, RegionLookupService,
+    ReportJobService, ReportProcessor, ReportService,
 };
-use crate::features::tickets::{routes as tickets_routes, TicketService};
 use crate::features::users::{
     clients::logto::LogtoUserProfileClient, routes as users_routes, services::UserProfileService,
 };
@@ -184,15 +183,10 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     shared::prompts::engine::init_prompt_service(Arc::clone(&prompt_service));
     tracing::info!("Global prompt service initialized for template engine");
 
-    // Initialize Ticket Service
-    let ticket_service = Arc::new(TicketService::new(pool.clone()));
-    tracing::info!("Ticket service initialized");
-
     // Initialize Report Services
     let report_service = Arc::new(ReportService::new(pool.clone()));
     let report_job_service = Arc::new(ReportJobService::new(pool.clone()));
     let geocoding_service = Arc::new(GeocodingService::new());
-    let clustering_service = Arc::new(ClusteringService::new(pool.clone()));
     let region_lookup_service = Arc::new(RegionLookupService::new(pool.clone()));
     tracing::info!("Report services initialized");
 
@@ -338,11 +332,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(users_routes::routes(user_profile_service))
         .merge(regions_routes::routes(region_service))
         .merge(files_routes::routes(file_service))
-        .merge(tickets_routes::routes(Arc::clone(&ticket_service)))
-        .merge(reports_routes::routes(
-            Arc::clone(&report_service),
-            Arc::clone(&clustering_service),
-        ))
+        .merge(reports_routes::routes(Arc::clone(&report_service)))
         .merge(citizen_agent_routes::routes(
             Arc::clone(&agent_runtime_service),
             Arc::clone(&conversation_service),

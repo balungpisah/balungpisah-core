@@ -4,7 +4,6 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::features::reports::models::{ReportSeverity, ReportStatus, ReportTagType};
-use crate::features::tickets::models::TicketStatus;
 use crate::shared::constants::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
 // =============================================================================
@@ -170,8 +169,6 @@ pub struct AdminReportDto {
 pub struct AdminReportDetailDto {
     pub id: Uuid,
     pub reference_number: Option<String>,
-    pub ticket_id: Option<Uuid>,
-    pub cluster_id: Option<Uuid>,
     pub title: Option<String>,
     pub description: Option<String>,
     pub timeline: Option<String>,
@@ -301,112 +298,6 @@ pub struct AdminContributorDetailDto {
     pub contribution_offer: Option<String>,
     // Common
     pub agreed: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-// =============================================================================
-// TICKET DTOs
-// =============================================================================
-
-/// Query params for listing tickets
-#[derive(Debug, Clone, Deserialize, IntoParams)]
-pub struct TicketQueryParams {
-    /// Page number (1-indexed)
-    #[serde(default = "default_page")]
-    #[param(minimum = 1)]
-    pub page: i64,
-    /// Items per page
-    #[serde(default = "default_page_size")]
-    #[param(minimum = 1, maximum = 100)]
-    pub page_size: i64,
-    /// Filter by status
-    pub status: Option<TicketStatus>,
-    /// Filter from date (YYYY-MM-DD)
-    pub from_date: Option<NaiveDate>,
-    /// Filter to date (YYYY-MM-DD)
-    pub to_date: Option<NaiveDate>,
-    /// Search in reference_number
-    pub search: Option<String>,
-    /// Filter by user_id
-    pub user_id: Option<String>,
-    /// Filter by platform
-    pub platform: Option<String>,
-    /// Filter tickets with errors only
-    pub has_error: Option<bool>,
-    /// Sort by field (default: created_at)
-    #[serde(default)]
-    pub sort_by: TicketSortBy,
-    /// Sort direction (default: desc)
-    #[serde(default)]
-    pub sort: SortDirection,
-}
-
-/// Sort fields for tickets
-#[derive(Debug, Clone, Copy, Default, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum TicketSortBy {
-    #[default]
-    CreatedAt,
-    SubmittedAt,
-    Status,
-    ReferenceNumber,
-}
-
-impl TicketSortBy {
-    pub fn as_sql(&self) -> &'static str {
-        match self {
-            TicketSortBy::CreatedAt => "created_at",
-            TicketSortBy::SubmittedAt => "submitted_at",
-            TicketSortBy::Status => "status",
-            TicketSortBy::ReferenceNumber => "reference_number",
-        }
-    }
-}
-
-impl TicketQueryParams {
-    pub fn offset(&self) -> i64 {
-        (self.page.max(1) - 1) * self.limit()
-    }
-    pub fn limit(&self) -> i64 {
-        self.page_size.clamp(1, MAX_PAGE_SIZE)
-    }
-}
-
-/// Admin view of ticket (list)
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct AdminTicketDto {
-    pub id: Uuid,
-    pub reference_number: String,
-    pub user_id: String,
-    pub platform: String,
-    pub status: TicketStatus,
-    pub confidence_score: f64,
-    pub retry_count: i32,
-    pub has_error: bool,
-    pub report_id: Option<Uuid>,
-    pub submitted_at: DateTime<Utc>,
-    pub processed_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
-}
-
-/// Admin view of ticket detail (single)
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct AdminTicketDetailDto {
-    pub id: Uuid,
-    pub reference_number: String,
-    pub adk_thread_id: Uuid,
-    pub user_id: String,
-    pub platform: String,
-    pub status: TicketStatus,
-    pub confidence_score: f64,
-    pub completeness_score: Option<f64>,
-    pub retry_count: i32,
-    pub error_message: Option<String>,
-    pub report_id: Option<Uuid>,
-    pub submitted_at: DateTime<Utc>,
-    pub processed_at: Option<DateTime<Utc>>,
-    pub last_attempt_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
