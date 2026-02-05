@@ -9,6 +9,7 @@ use crate::features::auth::guards::RequireSuperAdmin;
 use crate::features::prompts::dtos::{
     CreatePromptDto, PromptQueryParams, PromptResponseDto, UpdatePromptDto,
 };
+use crate::features::prompts::registry::{get_all_prompt_keys, PromptKeyDefinition};
 use crate::features::prompts::services::PromptService;
 use crate::shared::types::{ApiResponse, Meta};
 
@@ -176,4 +177,24 @@ pub async fn delete_prompt(
 ) -> Result<Json<ApiResponse<()>>> {
     service.delete(id).await?;
     Ok(Json(ApiResponse::success(None, None, None)))
+}
+
+/// List all valid prompt keys from the registry (super admin only)
+#[utoipa::path(
+    get,
+    path = "/api/admin/prompts/keys",
+    responses(
+        (status = 200, description = "Prompt keys retrieved successfully", body = ApiResponse<Vec<PromptKeyDefinition>>),
+        (status = 403, description = "Forbidden - super admin only")
+    ),
+    tag = "prompts",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn list_keys(
+    RequireSuperAdmin(_user): RequireSuperAdmin,
+) -> Result<Json<ApiResponse<Vec<PromptKeyDefinition>>>> {
+    let keys = get_all_prompt_keys();
+    Ok(Json(ApiResponse::success(Some(keys), None, None)))
 }
