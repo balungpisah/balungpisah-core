@@ -114,8 +114,12 @@ pub async fn render_template(
     ctx: &HashMap<&str, Value>,
 ) -> Result<String, TemplateError> {
     // Step 1: Try database first (if service is initialized)
+    // Database keys don't include the .jinja extension
+    let db_key = template_name
+        .strip_suffix(".jinja")
+        .unwrap_or(template_name);
     if let Some(service) = PROMPT_SERVICE.get() {
-        match service.get_template_by_key(template_name).await {
+        match service.get_template_by_key(db_key).await {
             Ok(Some(content)) => {
                 // Render database template
                 let mut env = Environment::new();
