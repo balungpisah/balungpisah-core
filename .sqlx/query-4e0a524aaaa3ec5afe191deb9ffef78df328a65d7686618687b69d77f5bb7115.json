@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                r.id,\n                r.ticket_id,\n                r.reference_number,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.verified_at,\n                r.resolved_at,\n                r.resolution_notes,\n                r.created_at,\n                r.updated_at\n            FROM reports r\n            WHERE r.id = $1\n            ",
+  "query": "\n            SELECT\n                id, reference_number,\n                title, description, timeline, impact,\n                status as \"status: ReportStatus\",\n                user_id, platform, adk_thread_id,\n                verified_at, verified_by,\n                resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at\n            FROM reports\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -10,26 +10,31 @@
       },
       {
         "ordinal": 1,
-        "name": "ticket_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 2,
         "name": "reference_number",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 3,
+        "ordinal": 2,
         "name": "title",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "description",
         "type_info": "Text"
       },
       {
+        "ordinal": 4,
+        "name": "timeline",
+        "type_info": "Text"
+      },
+      {
         "ordinal": 5,
+        "name": "impact",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "status: ReportStatus",
         "type_info": {
           "Custom": {
@@ -48,37 +53,52 @@
         }
       },
       {
-        "ordinal": 6,
-        "name": "timeline",
-        "type_info": "Text"
-      },
-      {
         "ordinal": 7,
-        "name": "impact",
-        "type_info": "Text"
+        "name": "user_id",
+        "type_info": "Varchar"
       },
       {
         "ordinal": 8,
+        "name": "platform",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "adk_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
         "name": "verified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
+        "name": "verified_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
         "name": "resolved_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 13,
+        "name": "resolved_by",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
         "name": "resolution_notes",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 15,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 16,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -94,7 +114,11 @@
       true,
       true,
       true,
+      true,
       false,
+      true,
+      true,
+      true,
       true,
       true,
       true,
@@ -104,5 +128,5 @@
       false
     ]
   },
-  "hash": "62459030592388f27e3555a75b25de42ce4150daf05879835a820a18b6a85f06"
+  "hash": "4e0a524aaaa3ec5afe191deb9ffef78df328a65d7686618687b69d77f5bb7115"
 }

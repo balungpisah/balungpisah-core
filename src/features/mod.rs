@@ -11,5 +11,4 @@ pub mod prompts;
 pub mod rate_limits;
 pub mod regions;
 pub mod reports;
-pub mod tickets;
 pub mod users;

@@ -116,9 +116,7 @@ pub struct DashboardReportDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DashboardReportDetailDto {
     pub id: Uuid,
-    /// Ticket ID (None for new report submission workflow)
-    pub ticket_id: Option<Uuid>,
-    /// Report reference number (for new workflow)
+    /// Report reference number
     pub reference_number: Option<String>,
     /// Report title (may be None for unprocessed reports)
     pub title: Option<String>,

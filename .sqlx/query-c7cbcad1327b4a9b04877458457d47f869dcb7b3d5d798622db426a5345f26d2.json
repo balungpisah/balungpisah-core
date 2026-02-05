@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                r.id,\n                r.reference_number,\n                r.title,\n                r.description,\n                r.status as \"status: ReportStatus\",\n                r.timeline,\n                r.impact,\n                r.verified_at,\n                r.resolved_at,\n                r.resolution_notes,\n                r.created_at,\n                r.updated_at\n            FROM reports r\n            WHERE r.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "reference_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status: ReportStatus",
+        "type_info": {
+          "Custom": {
+            "name": "report_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "pending",
+                "verified",
+                "in_progress",
+                "resolved",
+                "rejected"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "timeline",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "impact",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "resolved_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "resolution_notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c7cbcad1327b4a9b04877458457d47f869dcb7b3d5d798622db426a5345f26d2"
+}

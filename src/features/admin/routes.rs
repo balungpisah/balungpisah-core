@@ -17,8 +17,5 @@ pub fn routes(admin_service: Arc<AdminService>) -> Router {
         // Contributors
         .route("/contributors", get(handlers::list_contributors))
         .route("/contributors/{id}", get(handlers::get_contributor))
-        // Tickets
-        .route("/tickets", get(handlers::list_tickets))
-        .route("/tickets/{id}", get(handlers::get_ticket))
         .with_state(admin_service)
 }

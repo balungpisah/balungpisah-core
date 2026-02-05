@@ -4,7 +4,6 @@ use uuid::Uuid;
 use crate::core::error::{AppError, Result};
 use crate::features::admin::dtos::*;
 use crate::features::reports::models::{ReportSeverity, ReportStatus, ReportTagType};
-use crate::features::tickets::models::TicketStatus;
 
 /// Service for admin queries
 pub struct AdminService {
@@ -314,7 +313,7 @@ impl AdminService {
         let row = sqlx::query!(
             r#"
             SELECT
-                id, reference_number, ticket_id, cluster_id,
+                id, reference_number,
                 title, description, timeline, impact,
                 status as "status: ReportStatus",
                 user_id, platform, adk_thread_id,
@@ -342,8 +341,6 @@ impl AdminService {
         Ok(AdminReportDetailDto {
             id: row.id,
             reference_number: row.reference_number,
-            ticket_id: row.ticket_id,
-            cluster_id: row.cluster_id,
             title: row.title,
             description: row.description,
             timeline: row.timeline,
@@ -650,179 +647,6 @@ impl AdminService {
             updated_at: row.updated_at,
         })
     }
-
-    // =========================================================================
-    // TICKETS
-    // =========================================================================
-
-    /// List tickets with pagination and filters
-    pub async fn list_tickets(
-        &self,
-        params: &TicketQueryParams,
-    ) -> Result<(Vec<AdminTicketDto>, i64)> {
-        let offset = params.offset();
-        let limit = params.limit();
-        let sort_by = params.sort_by.as_sql();
-        let sort_dir = params.sort.as_sql();
-
-        // Build WHERE clause dynamically
-        let mut conditions = Vec::new();
-        let mut args: Vec<String> = Vec::new();
-
-        if let Some(ref status) = params.status {
-            args.push(status.to_string());
-            conditions.push(format!("status = ${}::ticket_status", args.len()));
-        }
-
-        if let Some(from_date) = params.from_date {
-            args.push(from_date.to_string());
-            conditions.push(format!("created_at >= ${}::date", args.len()));
-        }
-
-        if let Some(to_date) = params.to_date {
-            args.push(to_date.to_string());
-            conditions.push(format!(
-                "created_at < (${}::date + interval '1 day')",
-                args.len()
-            ));
-        }
-
-        if let Some(ref search) = params.search {
-            args.push(format!("%{}%", search.to_lowercase()));
-            conditions.push(format!("LOWER(reference_number) LIKE ${}", args.len()));
-        }
-
-        if let Some(ref user_id) = params.user_id {
-            args.push(user_id.clone());
-            conditions.push(format!("user_id = ${}", args.len()));
-        }
-
-        if let Some(ref platform) = params.platform {
-            args.push(platform.clone());
-            conditions.push(format!("platform = ${}", args.len()));
-        }
-
-        if let Some(has_error) = params.has_error {
-            if has_error {
-                conditions.push("error_message IS NOT NULL".to_string());
-            } else {
-                conditions.push("error_message IS NULL".to_string());
-            }
-        }
-
-        let where_clause = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
-
-        // Get total count
-        let count_query = format!(r#"SELECT COUNT(*) FROM tickets {}"#, where_clause);
-        let total: i64 = self.execute_count_query(&count_query, &args).await?;
-
-        // Get paginated data with dynamic ORDER BY
-        let data_query = format!(
-            r#"
-            SELECT
-                id, reference_number, user_id, platform,
-                status, confidence_score,
-                retry_count, error_message, report_id,
-                submitted_at, processed_at, created_at
-            FROM tickets
-            {}
-            ORDER BY {} {}
-            OFFSET {} LIMIT {}
-            "#,
-            where_clause, sort_by, sort_dir, offset, limit
-        );
-
-        let items = self.execute_tickets_query(&data_query, &args).await?;
-
-        Ok((items, total))
-    }
-
-    async fn execute_tickets_query(
-        &self,
-        query: &str,
-        args: &[String],
-    ) -> Result<Vec<AdminTicketDto>> {
-        let mut sqlx_query = sqlx::query_as::<_, TicketRow>(query);
-        for arg in args {
-            sqlx_query = sqlx_query.bind(arg);
-        }
-        let rows = sqlx_query.fetch_all(&self.pool).await.map_err(|e| {
-            tracing::error!("Failed to execute tickets query: {:?}", e);
-            AppError::Database(e)
-        })?;
-
-        Ok(rows
-            .into_iter()
-            .map(|r| AdminTicketDto {
-                id: r.id,
-                reference_number: r.reference_number,
-                user_id: r.user_id,
-                platform: r.platform,
-                status: r.status,
-                confidence_score: r.confidence_score.to_string().parse::<f64>().unwrap_or(0.0),
-                retry_count: r.retry_count,
-                has_error: r.error_message.is_some(),
-                report_id: r.report_id,
-                submitted_at: r.submitted_at,
-                processed_at: r.processed_at,
-                created_at: r.created_at,
-            })
-            .collect())
-    }
-
-    /// Get a single ticket by ID with full details
-    pub async fn get_ticket(&self, id: Uuid) -> Result<AdminTicketDetailDto> {
-        let row = sqlx::query!(
-            r#"
-            SELECT
-                id, reference_number, adk_thread_id, user_id, platform,
-                status as "status: TicketStatus",
-                confidence_score, completeness_score,
-                retry_count, error_message, report_id,
-                submitted_at, processed_at, last_attempt_at,
-                created_at, updated_at
-            FROM tickets
-            WHERE id = $1
-            "#,
-            id
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to get ticket: {:?}", e);
-            AppError::Database(e)
-        })?
-        .ok_or_else(|| AppError::NotFound("Ticket not found".to_string()))?;
-
-        Ok(AdminTicketDetailDto {
-            id: row.id,
-            reference_number: row.reference_number,
-            adk_thread_id: row.adk_thread_id,
-            user_id: row.user_id,
-            platform: row.platform,
-            status: row.status,
-            confidence_score: row
-                .confidence_score
-                .to_string()
-                .parse::<f64>()
-                .unwrap_or(0.0),
-            completeness_score: row
-                .completeness_score
-                .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0)),
-            retry_count: row.retry_count,
-            error_message: row.error_message,
-            report_id: row.report_id,
-            submitted_at: row.submitted_at,
-            processed_at: row.processed_at,
-            last_attempt_at: row.last_attempt_at,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        })
-    }
 }
 
 // =========================================================================
@@ -863,21 +687,5 @@ struct ContributorRow {
     email: Option<String>,
     city: Option<String>,
     organization_name: Option<String>,
-    created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(sqlx::FromRow)]
-struct TicketRow {
-    id: Uuid,
-    reference_number: String,
-    user_id: String,
-    platform: String,
-    status: TicketStatus,
-    confidence_score: rust_decimal::Decimal,
-    retry_count: i32,
-    error_message: Option<String>,
-    report_id: Option<Uuid>,
-    submitted_at: chrono::DateTime<chrono::Utc>,
-    processed_at: Option<chrono::DateTime<chrono::Utc>>,
     created_at: chrono::DateTime<chrono::Utc>,
 }

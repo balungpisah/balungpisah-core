@@ -5,8 +5,8 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::features::reports::models::{
-    ClusterStatus, GeocodingSource, Report, ReportCategory, ReportCluster, ReportLocation,
-    ReportSeverity, ReportStatus, ReportTag, ReportTagType,
+    GeocodingSource, Report, ReportCategory, ReportLocation, ReportSeverity, ReportStatus,
+    ReportTag, ReportTagType,
 };
 
 /// Response DTO for a category assigned to a report
@@ -49,8 +49,6 @@ pub struct ReportResponseDto {
     pub id: Uuid,
     /// Human-readable reference number for tracking
     pub reference_number: Option<String>,
-    pub ticket_id: Option<Uuid>,
-    pub cluster_id: Option<Uuid>,
     pub title: Option<String>,
     pub description: Option<String>,
     pub timeline: Option<String>,
@@ -73,8 +71,6 @@ impl From<Report> for ReportResponseDto {
         Self {
             id: r.id,
             reference_number: r.reference_number,
-            ticket_id: r.ticket_id,
-            cluster_id: r.cluster_id,
             title: r.title,
             description: r.description,
             timeline: r.timeline,
@@ -146,44 +142,6 @@ impl From<ReportLocation> for ReportLocationResponseDto {
             village_name: None,
         }
     }
-}
-
-/// Response DTO for report cluster
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct ReportClusterResponseDto {
-    pub id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub center_lat: f64,
-    pub center_lon: f64,
-    pub radius_meters: i32,
-    pub report_count: i32,
-    pub status: ClusterStatus,
-    pub created_at: DateTime<Utc>,
-}
-
-impl From<ReportCluster> for ReportClusterResponseDto {
-    fn from(c: ReportCluster) -> Self {
-        Self {
-            id: c.id,
-            name: c.name,
-            description: c.description,
-            center_lat: c.center_lat,
-            center_lon: c.center_lon,
-            radius_meters: c.radius_meters,
-            report_count: c.report_count,
-            status: c.status,
-            created_at: c.created_at,
-        }
-    }
-}
-
-/// Response DTO for cluster with reports
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct ClusterDetailResponseDto {
-    #[serde(flatten)]
-    pub cluster: ReportClusterResponseDto,
-    pub reports: Vec<ReportResponseDto>,
 }
 
 /// Request DTO for updating report status

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE reports\n            SET status = 'rejected', resolution_notes = $2, updated_at = NOW()\n            WHERE id = $1\n            RETURNING\n                id, ticket_id, cluster_id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at,\n                reference_number, adk_thread_id, user_id, platform\n            ",
+  "query": "\n            SELECT\n                id, title, description,\n                timeline, impact,\n                status as \"status: ReportStatus\",\n                verified_at, verified_by, resolved_at, resolved_by, resolution_notes,\n                created_at, updated_at,\n                reference_number, adk_thread_id, user_id, platform\n            FROM reports\n            WHERE user_id = $1\n              AND status NOT IN ('pending', 'rejected')\n            ORDER BY created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -10,36 +10,26 @@
       },
       {
         "ordinal": 1,
-        "name": "ticket_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 2,
-        "name": "cluster_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 3,
         "name": "title",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 4,
+        "ordinal": 2,
         "name": "description",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 3,
         "name": "timeline",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 4,
         "name": "impact",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 5,
         "name": "status: ReportStatus",
         "type_info": {
           "Custom": {
@@ -58,71 +48,68 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "verified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "verified_by",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 10,
+        "ordinal": 8,
         "name": "resolved_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 9,
         "name": "resolved_by",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 12,
+        "ordinal": 10,
         "name": "resolution_notes",
         "type_info": "Text"
       },
       {
-        "ordinal": 13,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 13,
         "name": "reference_number",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 16,
+        "ordinal": 14,
         "name": "adk_thread_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 17,
+        "ordinal": 15,
         "name": "user_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 18,
+        "ordinal": 16,
         "name": "platform",
         "type_info": "Varchar"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Text"
       ]
     },
     "nullable": [
       false,
-      true,
-      true,
       true,
       true,
       true,
@@ -141,5 +128,5 @@
       true
     ]
   },
-  "hash": "36a4698305d7aa4d9cbc38796a6772a700015518492afed3b8fad50868c017db"
+  "hash": "aac4401e0a6e02bb21b749da2f96fd80aab7a4affe8c317587993f49970f4acf"
 }

@@ -61,8 +61,6 @@ impl std::fmt::Display for ReportSeverity {
 #[allow(dead_code)]
 pub struct Report {
     pub id: Uuid,
-    pub ticket_id: Option<Uuid>,
-    pub cluster_id: Option<Uuid>,
     pub title: Option<String>,
     pub description: Option<String>,
     pub timeline: Option<String>,
@@ -80,16 +78,6 @@ pub struct Report {
     pub adk_thread_id: Option<Uuid>,
     pub user_id: Option<String>,
     pub platform: Option<String>,
-}
-
-/// Data for creating a new report (from ticket processor - legacy)
-#[derive(Debug)]
-pub struct CreateReport {
-    pub ticket_id: Uuid,
-    pub title: String,
-    pub description: String,
-    pub timeline: Option<String>,
-    pub impact: Option<String>,
 }
 
 /// Data for creating a report submission (from agent - new workflow)

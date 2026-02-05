@@ -37,3 +37,6 @@ docs/temp
 
 # Load testing
 load-tests/
+
+# Database backups
+backups/

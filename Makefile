@@ -1,4 +1,4 @@
-.PHONY: help run build test clean migrate-run migrate-revert migrate-info migrate-add db-create db-drop dev check fmt clippy test-watch cross-build docker-build
+.PHONY: help run build test clean migrate-run migrate-revert migrate-info migrate-add db-create db-drop db-backup db-restore dev check fmt clippy test-watch cross-build docker-build
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -42,6 +42,41 @@ db-drop: ## Drop database
 
 db-reset: ## Drop and recreate database
 	sqlx database drop -y && sqlx database create
+
+db-backup: ## Create database backup with timestamp
+	@echo "Creating database backup..."
+	@mkdir -p backups
+	@export $$(grep -v '^#' .env | xargs) && \
+	TIMESTAMP=$$(date +%Y%m%d_%H%M%S) && \
+	DB_URL=$${DATABASE_URL} && \
+	DB_USER=$$(echo $$DB_URL | sed -n 's/postgres:\/\/\([^:]*\):.*/\1/p') && \
+	DB_PASS=$$(echo $$DB_URL | sed -n 's/postgres:\/\/[^:]*:\([^@]*\)@.*/\1/p') && \
+	DB_HOST=$$(echo $$DB_URL | sed -n 's/.*@\([^:]*\):.*/\1/p') && \
+	DB_PORT=$$(echo $$DB_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p') && \
+	DB_NAME=$$(echo $$DB_URL | sed -n 's/.*\/\(.*\)/\1/p') && \
+	BACKUP_FILE="backups/$${DB_NAME}_$${TIMESTAMP}.sql" && \
+	PGPASSWORD=$$DB_PASS pg_dump -h $$DB_HOST -p $$DB_PORT -U $$DB_USER -d $$DB_NAME -F p -f $$BACKUP_FILE && \
+	echo "Backup created: $$BACKUP_FILE" && \
+	echo "Backup size: $$(du -h $$BACKUP_FILE | cut -f1)"
+
+db-restore: ## Restore database from backup (use BACKUP_FILE=path/to/backup.sql)
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "Error: BACKUP_FILE is required. Usage: make db-restore BACKUP_FILE=backups/backup.sql"; \
+		echo ""; \
+		echo "Available backups:"; \
+		ls -lh backups/*.sql 2>/dev/null || echo "No backups found in backups/"; \
+		exit 1; \
+	fi
+	@echo "Restoring database from $(BACKUP_FILE)..."
+	@export $$(grep -v '^#' .env | xargs) && \
+	DB_URL=$${DATABASE_URL} && \
+	DB_USER=$$(echo $$DB_URL | sed -n 's/postgres:\/\/\([^:]*\):.*/\1/p') && \
+	DB_PASS=$$(echo $$DB_URL | sed -n 's/postgres:\/\/[^:]*:\([^@]*\)@.*/\1/p') && \
+	DB_HOST=$$(echo $$DB_URL | sed -n 's/.*@\([^:]*\):.*/\1/p') && \
+	DB_PORT=$$(echo $$DB_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p') && \
+	DB_NAME=$$(echo $$DB_URL | sed -n 's/.*\/\(.*\)/\1/p') && \
+	PGPASSWORD=$$DB_PASS psql -h $$DB_HOST -p $$DB_PORT -U $$DB_USER -d $$DB_NAME -f $(BACKUP_FILE) && \
+	echo "Database restored from $(BACKUP_FILE)"
 
 # Migration Commands (SQLx)
 migrate-run: ## Run pending migrations
