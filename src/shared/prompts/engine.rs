@@ -6,11 +6,22 @@
 use minijinja::{Environment, Value};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use thiserror::Error;
 
 /// Global template environment
 static TEMPLATE_ENV: OnceLock<Environment<'static>> = OnceLock::new();
+
+/// Global PromptService instance (set during app initialization)
+static PROMPT_SERVICE: OnceLock<Arc<crate::features::prompts::services::PromptService>> =
+    OnceLock::new();
+
+/// Initialize the global PromptService
+pub fn init_prompt_service(service: Arc<crate::features::prompts::services::PromptService>) {
+    PROMPT_SERVICE
+        .set(service)
+        .expect("PromptService already initialized");
+}
 
 /// Template directory relative to the project root
 const TEMPLATE_DIR: &str = "templates/prompts";
@@ -78,6 +89,10 @@ fn get_environment() -> &'static Environment<'static> {
 
 /// Render a template with the given context.
 ///
+/// This function implements a hybrid approach:
+/// 1. First tries to fetch the template from the database (if PromptService is initialized)
+/// 2. Falls back to file-based templates if not found in database
+///
 /// # Arguments
 /// * `template_name` - The template path relative to `templates/prompts/` (e.g., "citizen_report_agent/system.jinja")
 /// * `context` - A HashMap of variable names to values
@@ -92,19 +107,56 @@ fn get_environment() -> &'static Environment<'static> {
 /// ctx.insert("date", "03-02-2026");
 /// ctx.insert("time", "14:30");
 ///
-/// let prompt = render_template("citizen_report_agent/system.jinja", &ctx)?;
+/// let prompt = render_template("citizen_report_agent/system.jinja", &ctx).await?;
 /// ```
-pub fn render_template(
+pub async fn render_template(
     template_name: &str,
     ctx: &HashMap<&str, Value>,
 ) -> Result<String, TemplateError> {
+    // Step 1: Try database first (if service is initialized)
+    if let Some(service) = PROMPT_SERVICE.get() {
+        match service.get_template_by_key(template_name).await {
+            Ok(Some(content)) => {
+                // Render database template
+                let mut env = Environment::new();
+                env.add_template(template_name, &content)
+                    .map_err(|e| TemplateError::RenderError(e.to_string()))?;
+
+                let template = env
+                    .get_template(template_name)
+                    .map_err(|_| TemplateError::NotFound(template_name.to_string()))?;
+
+                let render_ctx = Value::from_iter(ctx.iter().map(|(k, v)| (*k, v.clone())));
+
+                return template
+                    .render(render_ctx)
+                    .map_err(|e| TemplateError::RenderError(e.to_string()));
+            }
+            Ok(None) => {
+                // Not in database, try file-based
+                tracing::debug!(
+                    "Template '{}' not found in database, trying file-based",
+                    template_name
+                );
+            }
+            Err(e) => {
+                // Database error, log but continue to file-based fallback
+                tracing::warn!(
+                    "Database lookup failed for template '{}': {:?}, falling back to files",
+                    template_name,
+                    e
+                );
+            }
+        }
+    }
+
+    // Step 2: Fall back to file-based templates
     let env = get_environment();
 
     let template = env
         .get_template(template_name)
         .map_err(|_| TemplateError::NotFound(template_name.to_string()))?;
 
-    // Convert HashMap to Value (minijinja accepts Value as context)
     let render_ctx = Value::from_iter(ctx.iter().map(|(k, v)| (*k, v.clone())));
 
     template
@@ -116,13 +168,13 @@ pub fn render_template(
 ///
 /// For templates that only need string variables, this is more convenient.
 #[allow(dead_code)]
-pub fn render_template_simple(
+pub async fn render_template_simple(
     template_name: &str,
     ctx: &HashMap<&str, &str>,
 ) -> Result<String, TemplateError> {
     let value_ctx: HashMap<&str, Value> = ctx.iter().map(|(k, v)| (*k, Value::from(*v))).collect();
 
-    render_template(template_name, &value_ctx)
+    render_template(template_name, &value_ctx).await
 }
 
 /// Check if a template exists
@@ -144,14 +196,14 @@ pub fn list_templates() -> Vec<String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_render_template_simple() {
+    #[tokio::test]
+    async fn test_render_template_simple() {
         // This test will work if the template file exists
         // For now, just test that the function compiles and handles missing templates
         let mut ctx = HashMap::new();
         ctx.insert("test_var", "test_value");
 
-        let result = render_template_simple("nonexistent.jinja", &ctx);
+        let result = render_template_simple("nonexistent.jinja", &ctx).await;
         assert!(matches!(result, Err(TemplateError::NotFound(_))));
     }
 

@@ -232,7 +232,7 @@ impl ExtractionService {
         // Fetch categories from database for dynamic prompt
         let categories = self.fetch_active_categories().await?;
 
-        let system_prompt = Self::build_system_prompt(&categories)?;
+        let system_prompt = Self::build_system_prompt(&categories).await?;
         let user_prompt = Self::build_user_prompt(conversation);
 
         // Build inference request with schema in system prompt (avoiding output_schema bug)
@@ -276,7 +276,7 @@ impl ExtractionService {
         Ok(extracted)
     }
 
-    fn build_system_prompt(categories: &[CategoryInfo]) -> Result<String> {
+    async fn build_system_prompt(categories: &[CategoryInfo]) -> Result<String> {
         // Build dynamic category list from database
         let category_list = if categories.is_empty() {
             // Fallback to default categories if database is empty
@@ -299,6 +299,7 @@ impl ExtractionService {
         let json_schema = ExtractedReportData::json_schema_string();
 
         render_extraction_prompt(&category_list, &json_schema)
+            .await
             .map_err(|e| AppError::Internal(format!("Failed to render extraction prompt: {}", e)))
     }
 
@@ -486,10 +487,10 @@ mod tests {
         assert!(!schema.contains("llm_error_message"));
     }
 
-    #[test]
-    fn test_build_system_prompt_contains_schema() {
+    #[tokio::test]
+    async fn test_build_system_prompt_contains_schema() {
         // Test with empty categories (uses fallback)
-        let prompt = ExtractionService::build_system_prompt(&[]).unwrap();
+        let prompt = ExtractionService::build_system_prompt(&[]).await.unwrap();
 
         // Should contain the schema
         assert!(prompt.contains("title"));
@@ -519,8 +520,8 @@ mod tests {
         assert!(prompt.contains("location_province"));
     }
 
-    #[test]
-    fn test_build_system_prompt_with_dynamic_categories() {
+    #[tokio::test]
+    async fn test_build_system_prompt_with_dynamic_categories() {
         let categories = vec![
             CategoryInfo {
                 name: "Infrastructure".to_string(),
@@ -534,7 +535,9 @@ mod tests {
             },
         ];
 
-        let prompt = ExtractionService::build_system_prompt(&categories).unwrap();
+        let prompt = ExtractionService::build_system_prompt(&categories)
+            .await
+            .unwrap();
 
         // Should contain the dynamic categories in the Available Category Slugs section
         assert!(prompt.contains("`infrastructure` - Infrastructure"));
