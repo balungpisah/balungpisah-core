@@ -94,5 +94,5 @@ pub async fn render_extraction_prompt(
     ctx.insert("category_list", Value::from(category_list));
     ctx.insert("json_schema", Value::from(json_schema));
 
-    render_template("extraction/system.jinja", &ctx).await
+    render_template("citizen_report_extraction/system.jinja", &ctx).await
 }
