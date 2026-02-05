@@ -1,8 +1,16 @@
 use chrono::{DateTime, Utc};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 use validator::Validate;
+
+/// Regex for prompt key format: snake_case segments separated by `/`
+/// Examples: "citizen_report_agent/system", "extraction/system"
+/// No .jinja extension, no leading/trailing slashes, no uppercase
+static PROMPT_KEY_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)+$").unwrap());
 
 use crate::shared::constants::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
@@ -70,7 +78,8 @@ impl PromptQueryParams {
 // Create request
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreatePromptDto {
-    #[validate(length(min = 1, max = 200))]
+    /// Prompt key in format: `agent_name/prompt_type` (snake_case, no .jinja extension)
+    #[validate(length(min = 3, max = 200), regex(path = *PROMPT_KEY_REGEX, message = "key must be in snake_case format with at least two segments separated by '/' (e.g., 'citizen_report_agent/system'). No .jinja extension, no uppercase, no leading/trailing slashes."))]
     pub key: String,
 
     #[validate(length(min = 1, max = 200))]
