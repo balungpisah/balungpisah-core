@@ -26,4 +26,14 @@ if ! cargo check; then
     exit 1
 fi
 
+# 4. SQLx prepare (requires running database)
+echo "📦 Running cargo sqlx prepare..."
+if cargo sqlx prepare 2>/dev/null; then
+    # Auto-stage updated .sqlx/ files
+    git add .sqlx/
+    echo "✅ SQLx offline data updated and staged."
+else
+    echo "⚠️  cargo sqlx prepare skipped (database not available)."
+fi
+
 echo "✅ All pre-commit checks passed!"
