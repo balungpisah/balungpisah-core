@@ -6,7 +6,6 @@ use axum::{
 };
 
 use crate::core::error::Result;
-use crate::features::auth::model::AuthenticatedUser;
 use crate::features::regions::dtos::{
     DistrictResponseDto, ProvinceResponseDto, RegencyResponseDto, RegionSearchQuery,
     VillageResponseDto,
@@ -23,13 +22,10 @@ use crate::shared::types::ApiResponse;
     params(RegionSearchQuery),
     responses(
         (status = 200, description = "List of provinces", body = ApiResponse<Vec<ProvinceResponseDto>>),
-        (status = 401, description = "Unauthorized")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn list_provinces(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Query(query): Query<RegionSearchQuery>,
 ) -> Result<Json<ApiResponse<Vec<ProvinceResponseDto>>>> {
@@ -47,14 +43,11 @@ pub async fn list_provinces(
     ),
     responses(
         (status = 200, description = "Province details", body = ApiResponse<ProvinceResponseDto>),
-        (status = 401, description = "Unauthorized"),
         (status = 404, description = "Province not found")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn get_province(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Path(code): Path<String>,
 ) -> Result<Json<ApiResponse<ProvinceResponseDto>>> {
@@ -76,14 +69,11 @@ pub async fn get_province(
     ),
     responses(
         (status = 200, description = "List of regencies in the province", body = ApiResponse<Vec<RegencyResponseDto>>),
-        (status = 401, description = "Unauthorized"),
         (status = 404, description = "Province not found")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn list_regencies_by_province(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Path(code): Path<String>,
     Query(query): Query<RegionSearchQuery>,
@@ -106,14 +96,11 @@ pub async fn list_regencies_by_province(
     ),
     responses(
         (status = 200, description = "Regency details", body = ApiResponse<RegencyResponseDto>),
-        (status = 401, description = "Unauthorized"),
         (status = 404, description = "Regency not found")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn get_regency(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Path(code): Path<String>,
 ) -> Result<Json<ApiResponse<RegencyResponseDto>>> {
@@ -129,13 +116,10 @@ pub async fn get_regency(
     responses(
         (status = 200, description = "List of regencies matching search", body = ApiResponse<Vec<RegencyResponseDto>>),
         (status = 400, description = "Search parameter required"),
-        (status = 401, description = "Unauthorized")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn search_regencies(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Query(query): Query<RegionSearchQuery>,
 ) -> Result<Json<ApiResponse<Vec<RegencyResponseDto>>>> {
@@ -164,14 +148,11 @@ pub async fn search_regencies(
     ),
     responses(
         (status = 200, description = "List of districts in the regency", body = ApiResponse<Vec<DistrictResponseDto>>),
-        (status = 401, description = "Unauthorized"),
         (status = 404, description = "Regency not found")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn list_districts_by_regency(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Path(code): Path<String>,
     Query(query): Query<RegionSearchQuery>,
@@ -194,14 +175,11 @@ pub async fn list_districts_by_regency(
     ),
     responses(
         (status = 200, description = "District details", body = ApiResponse<DistrictResponseDto>),
-        (status = 401, description = "Unauthorized"),
         (status = 404, description = "District not found")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn get_district(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Path(code): Path<String>,
 ) -> Result<Json<ApiResponse<DistrictResponseDto>>> {
@@ -221,13 +199,10 @@ pub async fn get_district(
     responses(
         (status = 200, description = "List of districts matching search", body = ApiResponse<Vec<DistrictResponseDto>>),
         (status = 400, description = "Search parameter required"),
-        (status = 401, description = "Unauthorized")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn search_districts(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Query(query): Query<RegionSearchQuery>,
 ) -> Result<Json<ApiResponse<Vec<DistrictResponseDto>>>> {
@@ -256,14 +231,11 @@ pub async fn search_districts(
     ),
     responses(
         (status = 200, description = "List of villages in the district", body = ApiResponse<Vec<VillageResponseDto>>),
-        (status = 401, description = "Unauthorized"),
         (status = 404, description = "District not found")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn list_villages_by_district(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Path(code): Path<String>,
     Query(query): Query<RegionSearchQuery>,
@@ -286,14 +258,11 @@ pub async fn list_villages_by_district(
     ),
     responses(
         (status = 200, description = "Village details", body = ApiResponse<VillageResponseDto>),
-        (status = 401, description = "Unauthorized"),
         (status = 404, description = "Village not found")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn get_village(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Path(code): Path<String>,
 ) -> Result<Json<ApiResponse<VillageResponseDto>>> {
@@ -309,13 +278,10 @@ pub async fn get_village(
     responses(
         (status = 200, description = "List of villages matching search", body = ApiResponse<Vec<VillageResponseDto>>),
         (status = 400, description = "Search parameter required"),
-        (status = 401, description = "Unauthorized")
     ),
     tag = "regions",
-    security(("bearer_auth" = []))
 )]
 pub async fn search_villages(
-    _user: AuthenticatedUser,
     State(service): State<Arc<RegionService>>,
     Query(query): Query<RegionSearchQuery>,
 ) -> Result<Json<ApiResponse<Vec<VillageResponseDto>>>> {

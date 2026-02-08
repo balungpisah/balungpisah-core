@@ -35,12 +35,12 @@ pub async fn get_summary(
 // Reports List
 // ============================================================================
 
-/// List all reports with pagination
+/// List all reports with pagination, sorting, and search
 #[utoipa::path(
     get,
     path = "/api/dashboard/reports",
     tag = "Dashboard",
-    params(PaginationParams),
+    params(ReportListParams),
     responses(
         (status = 200, description = "Paginated reports list", body = ApiResponse<Vec<DashboardReportDto>>),
         (status = 500, description = "Internal server error")
@@ -48,7 +48,7 @@ pub async fn get_summary(
 )]
 pub async fn list_reports(
     State(service): State<Arc<DashboardService>>,
-    Query(params): Query<PaginationParams>,
+    Query(params): Query<ReportListParams>,
 ) -> Result<Json<ApiResponse<Vec<DashboardReportDto>>>, AppError> {
     let (reports, total) = service.list_reports(&params).await?;
     Ok(Json(ApiResponse::success(
@@ -210,5 +210,71 @@ pub async fn get_map_data(
     Query(params): Query<LocationQueryParams>,
 ) -> Result<Json<ApiResponse<DashboardMapDataDto>>, AppError> {
     let data = service.get_map_data_markers(&params).await?;
+    Ok(Json(ApiResponse::success(Some(data), None, None)))
+}
+
+// ============================================================================
+// FASE 1: Enhanced Endpoints
+// ============================================================================
+
+/// Get enhanced map markers with comprehensive filtering
+#[utoipa::path(
+    get,
+    path = "/api/dashboard/reports/markers",
+    tag = "Dashboard",
+    params(EnhancedMapQueryParams),
+    responses(
+        (status = 200, description = "Enhanced map markers with filtering", body = ApiResponse<EnhancedMapDto>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_enhanced_markers(
+    State(service): State<Arc<DashboardService>>,
+    Query(params): Query<EnhancedMapQueryParams>,
+) -> Result<Json<ApiResponse<EnhancedMapDto>>, AppError> {
+    let data = service.get_enhanced_markers(&params).await?;
+    Ok(Json(ApiResponse::success(Some(data), None, None)))
+}
+
+/// Get comprehensive dashboard statistics
+#[utoipa::path(
+    get,
+    path = "/api/dashboard/reports/stats",
+    tag = "Dashboard",
+    params(EnhancedMapQueryParams),
+    responses(
+        (status = 200, description = "Comprehensive statistics", body = ApiResponse<ComprehensiveStatsDto>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_comprehensive_stats(
+    State(service): State<Arc<DashboardService>>,
+    Query(params): Query<EnhancedMapQueryParams>,
+) -> Result<Json<ApiResponse<ComprehensiveStatsDto>>, AppError> {
+    let data = service.get_comprehensive_stats(&params).await?;
+    Ok(Json(ApiResponse::success(Some(data), None, None)))
+}
+
+// ============================================================================
+// FASE 2: Cluster Analysis
+// ============================================================================
+
+/// Perform cluster analysis on reports
+#[utoipa::path(
+    post,
+    path = "/api/dashboard/reports/cluster",
+    tag = "Dashboard",
+    request_body = ClusterRequest,
+    responses(
+        (status = 200, description = "Cluster analysis results", body = ApiResponse<ClusterAnalysisDto>),
+        (status = 400, description = "Invalid request"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn cluster_reports(
+    State(service): State<Arc<DashboardService>>,
+    Json(request): Json<ClusterRequest>,
+) -> Result<Json<ApiResponse<ClusterAnalysisDto>>, AppError> {
+    let data = service.cluster_reports(&request).await?;
     Ok(Json(ApiResponse::success(Some(data), None, None)))
 }

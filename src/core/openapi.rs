@@ -98,6 +98,11 @@ use crate::shared::types::{ApiResponse, Meta};
         dashboard_handlers::dashboard_handler::get_recent,
         dashboard_handlers::dashboard_handler::get_map,
         dashboard_handlers::dashboard_handler::get_map_data,
+        // Dashboard - FASE 1: Enhanced Filtering & Stats
+        dashboard_handlers::dashboard_handler::get_enhanced_markers,
+        dashboard_handlers::dashboard_handler::get_comprehensive_stats,
+        // Dashboard - FASE 2: Cluster Analysis
+        dashboard_handlers::dashboard_handler::cluster_reports,
     ),
     components(
         schemas(
@@ -233,6 +238,26 @@ use crate::shared::types::{ApiResponse, Meta};
             dashboard_dtos::MapPointDto,
             dashboard_dtos::DashboardMapDataDto,
             ApiResponse<dashboard_dtos::DashboardMapDataDto>,
+            // Dashboard - FASE 1: Enhanced Filtering & Stats
+            dashboard_dtos::EnhancedMapQueryParams,
+            dashboard_dtos::EnhancedMapMarker,
+            dashboard_dtos::EnhancedMapDto,
+            dashboard_dtos::SeverityBreakdown,
+            dashboard_dtos::StatusBreakdown,
+            dashboard_dtos::TagBreakdown,
+            dashboard_dtos::CategoryCount,
+            dashboard_dtos::WeeklyCount,
+            dashboard_dtos::RegionCount,
+            dashboard_dtos::ComprehensiveStatsDto,
+            ApiResponse<dashboard_dtos::EnhancedMapDto>,
+            ApiResponse<dashboard_dtos::ComprehensiveStatsDto>,
+            // Dashboard - FASE 2: Cluster Analysis
+            dashboard_dtos::ClusterMode,
+            dashboard_dtos::ClusterRequest,
+            dashboard_dtos::DateRange,
+            dashboard_dtos::ReportCluster,
+            dashboard_dtos::ClusterAnalysisDto,
+            ApiResponse<dashboard_dtos::ClusterAnalysisDto>,
             // Admin
             admin_dtos::SortDirection,
             admin_dtos::ReportSortBy,

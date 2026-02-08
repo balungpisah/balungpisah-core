@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
@@ -53,18 +53,25 @@ impl DashboardService {
     // List Reports (paginated)
     // ========================================================================
 
-    /// List all reports with pagination
+    /// List all reports with pagination, sorting, and search
     /// Returns (reports, total_count)
     pub async fn list_reports(
         &self,
-        params: &PaginationParams,
+        params: &ReportListParams,
     ) -> Result<(Vec<DashboardReportDto>, i64)> {
         let offset = params.offset();
         let limit = params.limit();
+        let search_pattern = params.search.as_deref().map(|s| format!("%{}%", s));
 
         // Get total count
         let total = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) as "count!" FROM reports WHERE status NOT IN ('pending', 'rejected')"#
+            r#"
+            SELECT COUNT(*) as "count!"
+            FROM reports
+            WHERE status IN ('draft', 'verified')
+              AND ($1::text IS NULL OR title ILIKE $1)
+            "#,
+            search_pattern
         )
         .fetch_one(&self.pool)
         .await
@@ -73,47 +80,65 @@ impl DashboardService {
             AppError::Database(e)
         })?;
 
-        // Get reports
-        let rows = sqlx::query!(
+        // Get reports — dynamic ORDER BY requires QueryBuilder
+        let sort_col = params.sort_column();
+        let sort_dir = params.sort_direction();
+
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
             r#"
             SELECT
                 r.id,
                 r.title,
                 r.description,
-                r.status as "status: ReportStatus",
+                r.status::text as status,
                 r.timeline,
                 r.impact,
                 r.created_at
             FROM reports r
-            WHERE r.status NOT IN ('pending', 'rejected')
-            ORDER BY r.created_at DESC
-            OFFSET $1 LIMIT $2
+            WHERE r.status IN ('draft', 'verified')
             "#,
-            offset,
-            limit
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| {
+        );
+
+        if let Some(ref pattern) = search_pattern {
+            qb.push(" AND r.title ILIKE ");
+            qb.push_bind(pattern);
+        }
+
+        // sort_column() and sort_direction() are validated/whitelisted, safe to push raw
+        qb.push(" ORDER BY ");
+        qb.push(sort_col);
+        qb.push(" ");
+        qb.push(sort_dir);
+
+        qb.push(" OFFSET ");
+        qb.push_bind(offset);
+        qb.push(" LIMIT ");
+        qb.push_bind(limit);
+
+        let rows = qb.build().fetch_all(&self.pool).await.map_err(|e| {
             tracing::error!("Failed to fetch reports: {:?}", e);
             AppError::Database(e)
         })?;
 
         let mut reports = Vec::with_capacity(rows.len());
-        for row in rows {
-            let categories = self.get_report_categories(row.id).await?;
-            let location = self.get_report_location(row.id).await?;
-            let tag_type = self.get_report_tag(row.id).await?;
+        for row in &rows {
+            let id: Uuid = row.get("id");
+            let status_str: String = row.get("status");
+            let status = parse_status(&status_str).unwrap_or(ReportStatus::Draft);
+
+            let categories = self.get_report_categories(id).await?;
+            let location = self.get_report_location(id).await?;
+            let tag_type = self.get_report_tag(id).await?;
 
             reports.push(DashboardReportDto {
-                id: row.id,
-                title: row.title,
-                description: row.description,
-                status: row.status,
+                id,
+                title: row.get("title"),
+                description: row.get("description"),
+                status,
                 tag_type,
-                timeline: row.timeline,
-                impact: row.impact,
-                created_at: row.created_at,
+                timeline: row.get("timeline"),
+                impact: row.get("impact"),
+                created_at: row.get("created_at"),
                 categories,
                 location,
             });
@@ -698,16 +723,20 @@ impl DashboardService {
     /// Get recent reports (last N days)
     pub async fn get_recent(&self, params: &RecentQueryParams) -> Result<DashboardRecentDto> {
         let days = params.days.clamp(1, 365);
-        let limit = params.limit.clamp(1, 100);
+        let offset = params.offset();
+        let limit = params.limit();
+        let search_pattern = params.search.as_deref().map(|s| format!("%{}%", s));
 
         let total = sqlx::query_scalar!(
             r#"
             SELECT COUNT(*) as "count!"
             FROM reports
             WHERE created_at >= CURRENT_DATE - $1::int
-              AND status NOT IN ('pending', 'rejected')
+              AND status IN ('draft', 'verified')
+              AND ($2::text IS NULL OR title ILIKE $2)
             "#,
-            days
+            days,
+            search_pattern
         )
         .fetch_one(&self.pool)
         .await
@@ -728,11 +757,14 @@ impl DashboardService {
                 r.created_at
             FROM reports r
             WHERE r.created_at >= CURRENT_DATE - $1::int
-              AND r.status NOT IN ('pending', 'rejected')
+              AND r.status IN ('draft', 'verified')
+              AND ($2::text IS NULL OR r.title ILIKE $2)
             ORDER BY r.created_at DESC
-            LIMIT $2
+            OFFSET $3 LIMIT $4
             "#,
             days,
+            search_pattern,
+            offset,
             limit
         )
         .fetch_all(&self.pool)
@@ -762,10 +794,13 @@ impl DashboardService {
             });
         }
 
+        let pagination = PaginationMeta::new(params.page, params.page_size, total);
+
         Ok(DashboardRecentDto {
             reports,
             days,
             total_count: total,
+            pagination,
         })
     }
 
@@ -899,6 +934,559 @@ impl DashboardService {
     }
 
     // ========================================================================
+    // FASE 1: Enhanced Map Markers & Comprehensive Stats (Optimized)
+    // ========================================================================
+
+    /// Get enhanced map markers — single query, all filters at SQL level
+    pub async fn get_enhanced_markers(
+        &self,
+        params: &EnhancedMapQueryParams,
+    ) -> Result<EnhancedMapDto> {
+        let filters = ParsedFilters::from_params(params);
+
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            r#"
+            SELECT
+                r.id,
+                r.reference_number,
+                r.title,
+                rl.lat,
+                rl.lon,
+                r.status::text as status,
+                r.created_at,
+                top_cat.severity::text as max_severity,
+                top_cat.cat_name as primary_category_name,
+                top_cat.color as primary_category_color,
+                (SELECT rt.tag_type::text FROM report_tags rt WHERE rt.report_id = r.id LIMIT 1) as tag_type
+            FROM reports r
+            INNER JOIN report_locations rl ON rl.report_id = r.id
+            LEFT JOIN LATERAL (
+                SELECT rc.severity, c.name as cat_name, c.color
+                FROM report_categories rc
+                JOIN categories c ON c.id = rc.category_id
+                WHERE rc.report_id = r.id
+                ORDER BY CASE rc.severity
+                    WHEN 'critical' THEN 1 WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3 WHEN 'low' THEN 4
+                END
+                LIMIT 1
+            ) top_cat ON true
+            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            "#,
+        );
+
+        filters.apply_to(&mut qb);
+
+        qb.push(" ORDER BY r.created_at DESC LIMIT ");
+        qb.push_bind(params.limit.min(1000));
+
+        let rows = qb.build().fetch_all(&self.pool).await.map_err(|e| {
+            tracing::error!("Failed to fetch enhanced markers: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        let markers: Vec<EnhancedMapMarker> = rows
+            .iter()
+            .map(|row| {
+                let severity_str: Option<String> = row.get("max_severity");
+                let max_severity = severity_str
+                    .as_deref()
+                    .and_then(parse_severity)
+                    .unwrap_or(ReportSeverity::Low);
+
+                let tag_str: Option<String> = row.get("tag_type");
+                let tag_type = tag_str.as_deref().and_then(parse_tag_type);
+
+                let status_str: String = row.get("status");
+                let status = parse_status(&status_str).unwrap_or(ReportStatus::Pending);
+
+                EnhancedMapMarker {
+                    id: row.get("id"),
+                    reference_number: row.get("reference_number"),
+                    title: row.get("title"),
+                    lat: row.get("lat"),
+                    lon: row.get("lon"),
+                    max_severity,
+                    primary_category_name: row.get("primary_category_name"),
+                    primary_category_color: row.get("primary_category_color"),
+                    tag_type,
+                    status,
+                    created_at: row.get("created_at"),
+                }
+            })
+            .collect();
+
+        let total_count = markers.len() as i64;
+
+        Ok(EnhancedMapDto {
+            markers,
+            total_count,
+        })
+    }
+
+    /// Get comprehensive statistics — all filters applied at SQL level
+    pub async fn get_comprehensive_stats(
+        &self,
+        params: &EnhancedMapQueryParams,
+    ) -> Result<ComprehensiveStatsDto> {
+        let filters = ParsedFilters::from_params(params);
+
+        // --- Total + status breakdown ---
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            r#"
+            SELECT
+                COUNT(DISTINCT r.id) as total,
+                COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'draft') as draft_cnt,
+                COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'verified') as verified_cnt
+            FROM reports r
+            INNER JOIN report_locations rl ON rl.report_id = r.id
+            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            "#,
+        );
+        // For the total query, skip the status filter so we can count all statuses
+        filters.apply_to_skip_status(&mut qb);
+
+        let stats_row = qb.build().fetch_one(&self.pool).await?;
+
+        let total: i64 = stats_row.get("total");
+        let by_status = StatusBreakdown {
+            draft: stats_row.get("draft_cnt"),
+            verified: stats_row.get("verified_cnt"),
+        };
+
+        // --- Severity breakdown ---
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            r#"
+            SELECT
+                rc.severity::text as severity,
+                COUNT(DISTINCT r.id) as cnt
+            FROM reports r
+            INNER JOIN report_locations rl ON rl.report_id = r.id
+            INNER JOIN report_categories rc ON rc.report_id = r.id
+            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            "#,
+        );
+        filters.apply_to(&mut qb);
+        qb.push(" GROUP BY rc.severity::text");
+
+        let sev_rows = qb.build().fetch_all(&self.pool).await?;
+
+        let mut by_severity = SeverityBreakdown {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+        };
+        for row in &sev_rows {
+            let sev: String = row.get("severity");
+            let cnt: i64 = row.get("cnt");
+            match sev.as_str() {
+                "critical" => by_severity.critical = cnt,
+                "high" => by_severity.high = cnt,
+                "medium" => by_severity.medium = cnt,
+                "low" => by_severity.low = cnt,
+                _ => {}
+            }
+        }
+
+        // --- Tag breakdown ---
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            r#"
+            SELECT
+                rt.tag_type::text as tag_type,
+                COUNT(DISTINCT r.id) as cnt
+            FROM reports r
+            INNER JOIN report_locations rl ON rl.report_id = r.id
+            INNER JOIN report_tags rt ON rt.report_id = r.id
+            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            "#,
+        );
+        filters.apply_to(&mut qb);
+        qb.push(" GROUP BY rt.tag_type::text");
+
+        let tag_rows = qb.build().fetch_all(&self.pool).await?;
+
+        let mut by_tag = TagBreakdown {
+            report: 0,
+            complaint: 0,
+            proposal: 0,
+            inquiry: 0,
+            appreciation: 0,
+        };
+        for row in &tag_rows {
+            let tag: String = row.get("tag_type");
+            let cnt: i64 = row.get("cnt");
+            match tag.as_str() {
+                "report" => by_tag.report = cnt,
+                "complaint" => by_tag.complaint = cnt,
+                "proposal" => by_tag.proposal = cnt,
+                "inquiry" => by_tag.inquiry = cnt,
+                "appreciation" => by_tag.appreciation = cnt,
+                _ => {}
+            }
+        }
+
+        // --- Top 10 categories ---
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            r#"
+            SELECT
+                c.id as category_id,
+                c.name as category_name,
+                COUNT(DISTINCT r.id) as cnt
+            FROM reports r
+            INNER JOIN report_locations rl ON rl.report_id = r.id
+            INNER JOIN report_categories rc ON rc.report_id = r.id
+            INNER JOIN categories c ON c.id = rc.category_id
+            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            "#,
+        );
+        filters.apply_to(&mut qb);
+        qb.push(" GROUP BY c.id, c.name ORDER BY cnt DESC LIMIT 10");
+
+        let cat_rows = qb.build().fetch_all(&self.pool).await?;
+
+        let by_category: Vec<CategoryCount> = cat_rows
+            .iter()
+            .map(|row| CategoryCount {
+                category_id: row.get("category_id"),
+                category_name: row.get("category_name"),
+                count: row.get::<i64, _>("cnt"),
+            })
+            .collect();
+
+        // --- Weekly trend (last 12 weeks) ---
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            r#"
+            SELECT
+                TO_CHAR(date_trunc('week', r.created_at), 'IYYY-"W"IW') as week,
+                COUNT(DISTINCT r.id) as cnt
+            FROM reports r
+            INNER JOIN report_locations rl ON rl.report_id = r.id
+            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+                AND r.created_at >= NOW() - INTERVAL '12 weeks'
+            "#,
+        );
+        filters.apply_to(&mut qb);
+        qb.push(
+            " GROUP BY date_trunc('week', r.created_at) ORDER BY date_trunc('week', r.created_at)",
+        );
+
+        let period_rows = qb.build().fetch_all(&self.pool).await?;
+
+        let by_period: Vec<WeeklyCount> = period_rows
+            .iter()
+            .map(|row| WeeklyCount {
+                week: row.get("week"),
+                count: row.get::<i64, _>("cnt"),
+            })
+            .collect();
+
+        // --- Top 10 regions ---
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            r#"
+            SELECT
+                p.id as region_id,
+                p.name as region_name,
+                COUNT(DISTINCT r.id) as cnt
+            FROM reports r
+            INNER JOIN report_locations rl ON rl.report_id = r.id
+            INNER JOIN provinces p ON p.id = rl.province_id
+            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            "#,
+        );
+        filters.apply_to(&mut qb);
+        qb.push(" GROUP BY p.id, p.name ORDER BY cnt DESC LIMIT 10");
+
+        let region_rows = qb.build().fetch_all(&self.pool).await?;
+
+        let by_region: Vec<RegionCount> = region_rows
+            .iter()
+            .map(|row| RegionCount {
+                region_id: row.get("region_id"),
+                region_name: row.get("region_name"),
+                region_type: "province".to_string(),
+                count: row.get::<i64, _>("cnt"),
+            })
+            .collect();
+
+        Ok(ComprehensiveStatsDto {
+            total,
+            by_severity,
+            by_status,
+            by_tag,
+            by_category,
+            by_period,
+            by_region,
+        })
+    }
+
+    // ========================================================================
+    // FASE 2: Cluster Analysis
+    // ========================================================================
+
+    /// Perform cluster analysis on reports
+    pub async fn cluster_reports(&self, request: &ClusterRequest) -> Result<ClusterAnalysisDto> {
+        // 1. Fetch reports with applied filters (reuse optimized markers query)
+        let markers = self.get_enhanced_markers(&request.filters).await?;
+
+        if markers.markers.is_empty() {
+            return Ok(ClusterAnalysisDto {
+                clusters: vec![],
+                total_reports: 0,
+                total_clusters: 0,
+            });
+        }
+
+        // 2. Batch-fetch categories for all reports in one query
+        let report_ids: Vec<Uuid> = markers.markers.iter().map(|m| m.id).collect();
+        let cat_rows = sqlx::query(
+            r#"
+            SELECT rc.report_id, c.name
+            FROM report_categories rc
+            JOIN categories c ON c.id = rc.category_id
+            WHERE rc.report_id = ANY($1)
+            "#,
+        )
+        .bind(&report_ids)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // Build report_id -> categories map
+        let mut categories_map: std::collections::HashMap<Uuid, Vec<String>> =
+            std::collections::HashMap::new();
+        for row in &cat_rows {
+            let rid: Uuid = row.get("report_id");
+            let name: String = row.get("name");
+            categories_map.entry(rid).or_default().push(name);
+        }
+
+        // 3. Build report data
+        let report_data: Vec<ReportData> = markers
+            .markers
+            .iter()
+            .map(|marker| ReportData {
+                id: marker.id,
+                lat: marker.lat,
+                lon: marker.lon,
+                max_severity: marker.max_severity,
+                primary_category: marker.primary_category_name.clone(),
+                categories: categories_map.get(&marker.id).cloned().unwrap_or_default(),
+                created_at: marker.created_at,
+            })
+            .collect();
+
+        // 4. Perform clustering based on mode
+        let clusters = match request.mode {
+            ClusterMode::Geographic => {
+                self.cluster_geographic(&report_data, request.radius_km)
+                    .await?
+            }
+            ClusterMode::Category => {
+                self.cluster_by_category(&report_data, request.radius_km)
+                    .await?
+            }
+        };
+
+        let total_reports = report_data.len() as i64;
+        let total_clusters = clusters.len() as i64;
+
+        Ok(ClusterAnalysisDto {
+            clusters,
+            total_reports,
+            total_clusters,
+        })
+    }
+
+    /// Geographic clustering: group by proximity only
+    async fn cluster_geographic(
+        &self,
+        reports: &[ReportData],
+        radius_km: f64,
+    ) -> Result<Vec<ReportCluster>> {
+        let mut clusters: Vec<Vec<usize>> = Vec::new();
+        let mut visited = vec![false; reports.len()];
+
+        // Simple DBSCAN-like algorithm
+        for i in 0..reports.len() {
+            if visited[i] {
+                continue;
+            }
+
+            let mut cluster = vec![i];
+            visited[i] = true;
+
+            // Find all reports within radius
+            for j in (i + 1)..reports.len() {
+                if visited[j] {
+                    continue;
+                }
+
+                let distance = haversine_distance(
+                    reports[i].lat,
+                    reports[i].lon,
+                    reports[j].lat,
+                    reports[j].lon,
+                );
+
+                if distance <= radius_km {
+                    cluster.push(j);
+                    visited[j] = true;
+                }
+            }
+
+            clusters.push(cluster);
+        }
+
+        // Convert to ReportCluster
+        self.build_clusters(reports, clusters).await
+    }
+
+    /// Category-based clustering: same category + proximity
+    async fn cluster_by_category(
+        &self,
+        reports: &[ReportData],
+        radius_km: f64,
+    ) -> Result<Vec<ReportCluster>> {
+        let mut clusters: Vec<Vec<usize>> = Vec::new();
+        let mut visited = vec![false; reports.len()];
+
+        for i in 0..reports.len() {
+            if visited[i] {
+                continue;
+            }
+
+            let mut cluster = vec![i];
+            visited[i] = true;
+
+            // Find reports with same category AND within radius
+            for j in (i + 1)..reports.len() {
+                if visited[j] {
+                    continue;
+                }
+
+                // Check if they share at least one category
+                let has_common_category = reports[i]
+                    .categories
+                    .iter()
+                    .any(|cat| reports[j].categories.contains(cat));
+
+                if !has_common_category {
+                    continue;
+                }
+
+                let distance = haversine_distance(
+                    reports[i].lat,
+                    reports[i].lon,
+                    reports[j].lat,
+                    reports[j].lon,
+                );
+
+                if distance <= radius_km {
+                    cluster.push(j);
+                    visited[j] = true;
+                }
+            }
+
+            clusters.push(cluster);
+        }
+
+        self.build_clusters(reports, clusters).await
+    }
+
+    /// Build ReportCluster objects from indices
+    async fn build_clusters(
+        &self,
+        reports: &[ReportData],
+        cluster_indices: Vec<Vec<usize>>,
+    ) -> Result<Vec<ReportCluster>> {
+        let mut result = Vec::new();
+
+        for (idx, indices) in cluster_indices.iter().enumerate() {
+            if indices.is_empty() {
+                continue;
+            }
+
+            // Calculate cluster center (average of coordinates)
+            let center_lat =
+                indices.iter().map(|&i| reports[i].lat).sum::<f64>() / indices.len() as f64;
+            let center_lon =
+                indices.iter().map(|&i| reports[i].lon).sum::<f64>() / indices.len() as f64;
+
+            // Find max severity
+            let max_severity = indices
+                .iter()
+                .map(|&i| &reports[i].max_severity)
+                .max_by_key(|s| match s {
+                    ReportSeverity::Critical => 4,
+                    ReportSeverity::High => 3,
+                    ReportSeverity::Medium => 2,
+                    ReportSeverity::Low => 1,
+                })
+                .cloned()
+                .unwrap_or(ReportSeverity::Low);
+
+            // Find dominant category (most common)
+            let mut category_counts: std::collections::HashMap<String, usize> =
+                std::collections::HashMap::new();
+            for &i in indices {
+                if let Some(ref cat) = reports[i].primary_category {
+                    *category_counts.entry(cat.clone()).or_insert(0) += 1;
+                }
+            }
+            let dominant_category = category_counts
+                .into_iter()
+                .max_by_key(|(_, count)| *count)
+                .map(|(cat, _)| cat)
+                .unwrap_or_else(|| "Unknown".to_string());
+
+            // Date range
+            let dates: Vec<_> = indices.iter().map(|&i| reports[i].created_at).collect();
+            let min_date = dates.iter().min().copied().unwrap();
+            let max_date = dates.iter().max().copied().unwrap();
+
+            // Report IDs
+            let report_ids: Vec<Uuid> = indices.iter().map(|&i| reports[i].id).collect();
+
+            // Get location name for label (approximate from first report)
+            let first_report_location = self.get_report_location(reports[indices[0]].id).await?;
+            let area_name = first_report_location
+                .as_ref()
+                .and_then(|loc| loc.regency_name.clone())
+                .or_else(|| {
+                    first_report_location
+                        .as_ref()
+                        .and_then(|loc| loc.province_name.clone())
+                })
+                .unwrap_or_else(|| "Unknown Area".to_string());
+
+            // Generate label
+            let label = format!("{} — {}", dominant_category, area_name);
+
+            // Count unique citizens (would need user_id from reports table)
+            // For now, approximate as report count
+            let citizen_count = indices.len() as i64;
+
+            result.push(ReportCluster {
+                cluster_id: format!("cluster_{}", idx + 1),
+                label,
+                center_lat,
+                center_lon,
+                report_count: indices.len() as i64,
+                citizen_count,
+                max_severity,
+                dominant_category,
+                date_range: DateRange {
+                    from: min_date,
+                    to: max_date,
+                },
+                report_ids,
+            });
+        }
+
+        Ok(result)
+    }
+
+    // ========================================================================
     // Helper functions for fetching related data
     // ========================================================================
 
@@ -1010,8 +1598,236 @@ impl DashboardService {
 }
 
 // ============================================================================
-// Helper functions
+// ParsedFilters — shared filter builder for SQL queries
 // ============================================================================
+
+/// Pre-parsed and validated filter values
+struct ParsedFilters {
+    province_id: Option<Uuid>,
+    regency_id: Option<Uuid>,
+    district_id: Option<Uuid>,
+    village_id: Option<Uuid>,
+    category_ids: Vec<Uuid>,
+    severities: Vec<String>,
+    tag_types: Vec<String>,
+    statuses: Vec<String>,
+    date_from: Option<chrono::NaiveDate>,
+    date_to: Option<chrono::NaiveDate>,
+    bounds: Option<(f64, f64, f64, f64)>, // sw_lat, sw_lon, ne_lat, ne_lon
+}
+
+impl ParsedFilters {
+    fn from_params(params: &EnhancedMapQueryParams) -> Self {
+        let category_ids = params
+            .category_ids
+            .as_deref()
+            .map(|s| {
+                s.split(',')
+                    .filter_map(|v| Uuid::parse_str(v.trim()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let severities = params
+            .severity
+            .as_deref()
+            .map(|s| {
+                s.split(',')
+                    .map(|v| v.trim().to_lowercase())
+                    .filter(|v| ["critical", "high", "medium", "low"].contains(&v.as_str()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let tag_types = params
+            .tag_types
+            .as_deref()
+            .map(|s| {
+                s.split(',')
+                    .map(|v| v.trim().to_lowercase())
+                    .filter(|v| {
+                        ["report", "complaint", "proposal", "inquiry", "appreciation"]
+                            .contains(&v.as_str())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let statuses = params
+            .status
+            .as_deref()
+            .map(|s| {
+                s.split(',')
+                    .map(|v| v.trim().to_lowercase())
+                    .filter(|v| {
+                        ["draft", "pending", "verified", "rejected", "resolved"]
+                            .contains(&v.as_str())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let date_from = params
+            .date_from
+            .as_deref()
+            .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+
+        let date_to = params
+            .date_to
+            .as_deref()
+            .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+
+        let bounds = params.bounds.as_deref().and_then(|s| {
+            let parts: Vec<f64> = s.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+            if parts.len() == 4 {
+                Some((parts[0], parts[1], parts[2], parts[3]))
+            } else {
+                None
+            }
+        });
+
+        Self {
+            province_id: params.province_id,
+            regency_id: params.regency_id,
+            district_id: params.district_id,
+            village_id: params.village_id,
+            category_ids,
+            severities,
+            tag_types,
+            statuses,
+            date_from,
+            date_to,
+            bounds,
+        }
+    }
+
+    /// Append WHERE conditions to a QueryBuilder (assumes WHERE already started)
+    fn apply_to<'a>(&'a self, qb: &mut sqlx::QueryBuilder<'a, sqlx::Postgres>) {
+        self.apply_common(qb);
+
+        // Status filter
+        if !self.statuses.is_empty() {
+            qb.push(" AND r.status::text = ANY(");
+            qb.push_bind(&self.statuses);
+            qb.push(")");
+        } else {
+            qb.push(" AND r.status::text IN ('draft', 'verified')");
+        }
+    }
+
+    /// Same as apply_to but skips status filter (used for total/status breakdown)
+    fn apply_to_skip_status<'a>(&'a self, qb: &mut sqlx::QueryBuilder<'a, sqlx::Postgres>) {
+        self.apply_common(qb);
+        // Default: only draft and verified
+        qb.push(" AND r.status::text IN ('draft', 'verified')");
+    }
+
+    fn apply_common<'a>(&'a self, qb: &mut sqlx::QueryBuilder<'a, sqlx::Postgres>) {
+        // Region filters
+        if let Some(province_id) = self.province_id {
+            qb.push(" AND rl.province_id = ");
+            qb.push_bind(province_id);
+        }
+        if let Some(regency_id) = self.regency_id {
+            qb.push(" AND rl.regency_id = ");
+            qb.push_bind(regency_id);
+        }
+        if let Some(district_id) = self.district_id {
+            qb.push(" AND rl.district_id = ");
+            qb.push_bind(district_id);
+        }
+        if let Some(village_id) = self.village_id {
+            qb.push(" AND rl.village_id = ");
+            qb.push_bind(village_id);
+        }
+
+        // Category filter
+        if !self.category_ids.is_empty() {
+            qb.push(
+                " AND EXISTS (SELECT 1 FROM report_categories rc2 WHERE rc2.report_id = r.id AND rc2.category_id = ANY(",
+            );
+            qb.push_bind(&self.category_ids);
+            qb.push("))");
+        }
+
+        // Severity filter
+        if !self.severities.is_empty() {
+            qb.push(
+                " AND EXISTS (SELECT 1 FROM report_categories rc3 WHERE rc3.report_id = r.id AND rc3.severity::text = ANY(",
+            );
+            qb.push_bind(&self.severities);
+            qb.push("))");
+        }
+
+        // Tag types filter
+        if !self.tag_types.is_empty() {
+            qb.push(
+                " AND EXISTS (SELECT 1 FROM report_tags rt2 WHERE rt2.report_id = r.id AND rt2.tag_type::text = ANY(",
+            );
+            qb.push_bind(&self.tag_types);
+            qb.push("))");
+        }
+
+        // Date range filters
+        if let Some(date_from) = self.date_from {
+            qb.push(" AND r.created_at >= ");
+            qb.push_bind(date_from);
+        }
+        if let Some(date_to) = self.date_to {
+            qb.push(" AND r.created_at < (");
+            qb.push_bind(date_to);
+            qb.push(" + INTERVAL '1 day')");
+        }
+
+        // Viewport bounds filter
+        if let Some((sw_lat, sw_lon, ne_lat, ne_lon)) = self.bounds {
+            qb.push(" AND rl.lat BETWEEN ");
+            qb.push_bind(sw_lat);
+            qb.push(" AND ");
+            qb.push_bind(ne_lat);
+            qb.push(" AND rl.lon BETWEEN ");
+            qb.push_bind(sw_lon);
+            qb.push(" AND ");
+            qb.push_bind(ne_lon);
+        }
+    }
+}
+
+// ============================================================================
+// Parse helpers for runtime query results
+// ============================================================================
+
+fn parse_severity(s: &str) -> Option<ReportSeverity> {
+    match s {
+        "critical" => Some(ReportSeverity::Critical),
+        "high" => Some(ReportSeverity::High),
+        "medium" => Some(ReportSeverity::Medium),
+        "low" => Some(ReportSeverity::Low),
+        _ => None,
+    }
+}
+
+fn parse_tag_type(s: &str) -> Option<ReportTagType> {
+    match s {
+        "report" => Some(ReportTagType::Report),
+        "complaint" => Some(ReportTagType::Complaint),
+        "proposal" => Some(ReportTagType::Proposal),
+        "inquiry" => Some(ReportTagType::Inquiry),
+        "appreciation" => Some(ReportTagType::Appreciation),
+        _ => None,
+    }
+}
+
+fn parse_status(s: &str) -> Option<ReportStatus> {
+    match s {
+        "draft" => Some(ReportStatus::Draft),
+        "pending" => Some(ReportStatus::Pending),
+        "verified" => Some(ReportStatus::Verified),
+        "rejected" => Some(ReportStatus::Rejected),
+        "resolved" => Some(ReportStatus::Resolved),
+        _ => None,
+    }
+}
 
 fn tag_label(tag_type: &ReportTagType) -> String {
     match tag_type {
@@ -1021,4 +1837,38 @@ fn tag_label(tag_type: &ReportTagType) -> String {
         ReportTagType::Inquiry => "Pertanyaan".to_string(),
         ReportTagType::Appreciation => "Apresiasi".to_string(),
     }
+}
+
+// ============================================================================
+// Clustering Helper Structures
+// ============================================================================
+
+/// Internal structure for clustering
+#[derive(Debug, Clone)]
+struct ReportData {
+    id: Uuid,
+    lat: f64,
+    lon: f64,
+    max_severity: ReportSeverity,
+    primary_category: Option<String>,
+    categories: Vec<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Calculate distance between two points using Haversine formula
+/// Returns distance in kilometers
+fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    const EARTH_RADIUS_KM: f64 = 6371.0;
+
+    let lat1_rad = lat1.to_radians();
+    let lat2_rad = lat2.to_radians();
+    let delta_lat = (lat2 - lat1).to_radians();
+    let delta_lon = (lon2 - lon1).to_radians();
+
+    let a = (delta_lat / 2.0).sin().powi(2)
+        + lat1_rad.cos() * lat2_rad.cos() * (delta_lon / 2.0).sin().powi(2);
+
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+
+    EARTH_RADIUS_KM * c
 }
