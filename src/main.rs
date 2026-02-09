@@ -219,7 +219,7 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     tracing::info!("Rate limit services initialized");
 
     // Initialize Admin Service
-    let admin_service = Arc::new(AdminService::new(pool.clone()));
+    let admin_service = Arc::new(AdminService::new(pool.clone(), encryption_service.clone()));
     tracing::info!("Admin service initialized");
 
     // Initialize Citizen Report Agent Services

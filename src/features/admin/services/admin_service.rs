@@ -1,18 +1,21 @@
 use sqlx::PgPool;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::core::error::{AppError, Result};
 use crate::features::admin::dtos::*;
 use crate::features::reports::models::{ReportSeverity, ReportStatus, ReportTagType};
+use crate::shared::encryption::EncryptionService;
 
 /// Service for admin queries
 pub struct AdminService {
     pool: PgPool,
+    encryption: Arc<EncryptionService>,
 }
 
 impl AdminService {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, encryption: Arc<EncryptionService>) -> Self {
+        Self { pool, encryption }
     }
 
     // =========================================================================
@@ -55,6 +58,8 @@ impl AdminService {
 
         if let Some(ref search) = params.search {
             args.push(format!("%{}%", search.to_lowercase()));
+            // Note: Email search removed because email is encrypted
+            // Only search in non-encrypted fields (name, expectation)
             conditions.push(format!(
                 "(LOWER(name) LIKE ${0} OR LOWER(expectation) LIKE ${0})",
                 args.len()
@@ -113,16 +118,27 @@ impl AdminService {
             AppError::Database(e)
         })?;
 
-        Ok(rows
-            .into_iter()
-            .map(|r| AdminExpectationDto {
+        // Decrypt emails for admin viewing
+        let mut results = Vec::new();
+        for r in rows {
+            let email = match self.encryption.decrypt_opt(r.email.as_deref()) {
+                Ok(decrypted) => decrypted,
+                Err(e) => {
+                    tracing::error!("Failed to decrypt email for expectation {}: {}", r.id, e);
+                    None // Return None if decryption fails
+                }
+            };
+
+            results.push(AdminExpectationDto {
                 id: r.id,
                 name: r.name,
-                email: r.email,
+                email,
                 expectation: r.expectation,
                 created_at: r.created_at,
-            })
-            .collect())
+            });
+        }
+
+        Ok(results)
     }
 
     /// Get a single expectation by ID
@@ -143,10 +159,19 @@ impl AdminService {
         })?
         .ok_or_else(|| AppError::NotFound("Expectation not found".to_string()))?;
 
+        // Decrypt email for admin viewing
+        let email = self
+            .encryption
+            .decrypt_opt(row.email.as_deref())
+            .map_err(|e| {
+                tracing::error!("Failed to decrypt email for expectation {}: {}", row.id, e);
+                AppError::Internal(format!("Decryption failed: {}", e))
+            })?;
+
         Ok(AdminExpectationDto {
             id: row.id,
             name: row.name,
-            email: row.email,
+            email,
             expectation: row.expectation,
             created_at: row.created_at,
         })
@@ -533,8 +558,10 @@ impl AdminService {
 
         if let Some(ref search) = params.search {
             args.push(format!("%{}%", search.to_lowercase()));
+            // Note: Email search removed because email is encrypted
+            // Only search in non-encrypted fields (name, organization_name)
             conditions.push(format!(
-                "(LOWER(name) LIKE ${0} OR LOWER(email) LIKE ${0} OR LOWER(organization_name) LIKE ${0})",
+                "(LOWER(name) LIKE ${0} OR LOWER(organization_name) LIKE ${0})",
                 args.len()
             ));
         }
@@ -586,18 +613,29 @@ impl AdminService {
             AppError::Database(e)
         })?;
 
-        Ok(rows
-            .into_iter()
-            .map(|r| AdminContributorDto {
+        // Decrypt emails for admin viewing
+        let mut results = Vec::new();
+        for r in rows {
+            let email = match self.encryption.decrypt_opt(r.email.as_deref()) {
+                Ok(decrypted) => decrypted,
+                Err(e) => {
+                    tracing::error!("Failed to decrypt email for contributor {}: {}", r.id, e);
+                    None // Return None if decryption fails
+                }
+            };
+
+            results.push(AdminContributorDto {
                 id: r.id,
                 submission_type: r.submission_type,
                 name: r.name,
-                email: r.email,
+                email,
                 city: r.city,
                 organization_name: r.organization_name,
                 created_at: r.created_at,
-            })
-            .collect())
+            });
+        }
+
+        Ok(results)
     }
 
     /// Get a single contributor by ID with full details
@@ -623,12 +661,57 @@ impl AdminService {
         })?
         .ok_or_else(|| AppError::NotFound("Contributor not found".to_string()))?;
 
+        // Decrypt PII fields for admin viewing
+        let email = self
+            .encryption
+            .decrypt_opt(row.email.as_deref())
+            .map_err(|e| {
+                tracing::error!("Failed to decrypt email for contributor {}: {}", row.id, e);
+                AppError::Internal(format!("Email decryption failed: {}", e))
+            })?;
+
+        let whatsapp = self
+            .encryption
+            .decrypt_opt(row.whatsapp.as_deref())
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to decrypt whatsapp for contributor {}: {}",
+                    row.id,
+                    e
+                );
+                AppError::Internal(format!("Whatsapp decryption failed: {}", e))
+            })?;
+
+        let contact_email = self
+            .encryption
+            .decrypt_opt(row.contact_email.as_deref())
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to decrypt contact_email for contributor {}: {}",
+                    row.id,
+                    e
+                );
+                AppError::Internal(format!("Contact email decryption failed: {}", e))
+            })?;
+
+        let contact_whatsapp = self
+            .encryption
+            .decrypt_opt(row.contact_whatsapp.as_deref())
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to decrypt contact_whatsapp for contributor {}: {}",
+                    row.id,
+                    e
+                );
+                AppError::Internal(format!("Contact whatsapp decryption failed: {}", e))
+            })?;
+
         Ok(AdminContributorDetailDto {
             id: row.id,
             submission_type: row.submission_type,
             name: row.name,
-            email: row.email,
-            whatsapp: row.whatsapp,
+            email,
+            whatsapp,
             city: row.city,
             role: row.role,
             skills: row.skills,
@@ -639,8 +722,8 @@ impl AdminService {
             organization_type: row.organization_type,
             contact_name: row.contact_name,
             contact_position: row.contact_position,
-            contact_whatsapp: row.contact_whatsapp,
-            contact_email: row.contact_email,
+            contact_whatsapp,
+            contact_email,
             contribution_offer: row.contribution_offer,
             agreed: row.agreed,
             created_at: row.created_at,

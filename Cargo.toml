@@ -7,10 +7,6 @@ edition = "2021"
 name = "balungpisah-core"
 path = "src/main.rs"
 
-[[bin]]
-name = "migrate_pii_encryption"
-path = "src/bin/migrate_pii_encryption.rs"
-
 [dependencies]
 # balungpisah-llm-gateway dependencies from Git
 balungpisah-adk = { git = "https://github.com/balungpisah/balungpisah-llm-gateway.git", branch = "main" }
