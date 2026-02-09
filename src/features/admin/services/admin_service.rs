@@ -57,13 +57,20 @@ impl AdminService {
         }
 
         if let Some(ref search) = params.search {
-            args.push(format!("%{}%", search.to_lowercase()));
-            // Note: Email search removed because email is encrypted
-            // Only search in non-encrypted fields (name, expectation)
-            conditions.push(format!(
-                "(LOWER(name) LIKE ${0} OR LOWER(expectation) LIKE ${0})",
-                args.len()
-            ));
+            // Check if search looks like an email (contains @)
+            if search.contains('@') {
+                // Use blind index for exact email match
+                let email_index = self.encryption.blind_index(search);
+                args.push(email_index);
+                conditions.push(format!("email_index = ${}", args.len()));
+            } else {
+                // Regular LIKE search for non-encrypted fields
+                args.push(format!("%{}%", search.to_lowercase()));
+                conditions.push(format!(
+                    "(LOWER(name) LIKE ${0} OR LOWER(expectation) LIKE ${0})",
+                    args.len()
+                ));
+            }
         }
 
         let where_clause = if conditions.is_empty() {
@@ -557,13 +564,20 @@ impl AdminService {
         }
 
         if let Some(ref search) = params.search {
-            args.push(format!("%{}%", search.to_lowercase()));
-            // Note: Email search removed because email is encrypted
-            // Only search in non-encrypted fields (name, organization_name)
-            conditions.push(format!(
-                "(LOWER(name) LIKE ${0} OR LOWER(organization_name) LIKE ${0})",
-                args.len()
-            ));
+            // Check if search looks like an email (contains @)
+            if search.contains('@') {
+                // Use blind index for exact email match
+                let email_index = self.encryption.blind_index(search);
+                args.push(email_index);
+                conditions.push(format!("email_index = ${}", args.len()));
+            } else {
+                // Regular LIKE search for non-encrypted fields
+                args.push(format!("%{}%", search.to_lowercase()));
+                conditions.push(format!(
+                    "(LOWER(name) LIKE ${0} OR LOWER(organization_name) LIKE ${0})",
+                    args.len()
+                ));
+            }
         }
 
         if let Some(ref city) = params.city {
