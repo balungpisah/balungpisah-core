@@ -1,30 +1,46 @@
 use sqlx::PgPool;
+use std::sync::Arc;
 
 use crate::core::error::{AppError, Result};
 use crate::features::expectations::dtos::{CreateExpectationDto, ExpectationResponseDto};
 use crate::features::expectations::models::Expectation;
+use crate::shared::encryption::EncryptionService;
 
 /// Service for managing user expectations
 pub struct ExpectationService {
     pool: PgPool,
+    encryption: Arc<EncryptionService>,
 }
 
 impl ExpectationService {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, encryption: Arc<EncryptionService>) -> Self {
+        Self { pool, encryption }
     }
 
     /// Create a new expectation from landing page submission
     pub async fn create(&self, dto: CreateExpectationDto) -> Result<ExpectationResponseDto> {
+        // Encrypt email if provided
+        let email_encrypted = self
+            .encryption
+            .encrypt_opt(dto.email.as_deref())
+            .map_err(|e| {
+                tracing::error!("Failed to encrypt email: {}", e);
+                AppError::Internal(format!("Encryption failed: {}", e))
+            })?;
+
+        // Generate blind index for email if provided
+        let email_index = self.encryption.blind_index_opt(dto.email.as_deref());
+
         let expectation = sqlx::query_as!(
             Expectation,
             r#"
-            INSERT INTO expectations (name, email, expectation)
-            VALUES ($1, $2, $3)
-            RETURNING id, name, email, expectation, created_at
+            INSERT INTO expectations (name, email_encrypted, email_index, expectation)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, name, email_encrypted as email, email_index, expectation, created_at
             "#,
             dto.name,
-            dto.email,
+            email_encrypted,
+            email_index,
             dto.expectation
         )
         .fetch_one(&self.pool)
@@ -35,11 +51,15 @@ impl ExpectationService {
         })?;
 
         tracing::info!(
-            "Expectation created: id={}, email={:?}",
+            "Expectation created: id={}, has_email={}",
             expectation.id,
-            expectation.email
+            email_encrypted.is_some()
         );
 
-        Ok(expectation.into())
+        // Decrypt for response
+        expectation.to_dto(&self.encryption).map_err(|e| {
+            tracing::error!("Failed to decrypt expectation for response: {}", e);
+            AppError::Internal(format!("Decryption failed: {}", e))
+        })
     }
 }
