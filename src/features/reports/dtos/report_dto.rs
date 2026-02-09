@@ -16,15 +16,19 @@ pub struct ReportCategoryDto {
     pub category_name: Option<String>,
     pub category_slug: Option<String>,
     pub severity: ReportSeverity,
+    pub color: Option<String>,
+    pub icon: Option<String>,
 }
 
 impl From<ReportCategory> for ReportCategoryDto {
     fn from(rc: ReportCategory) -> Self {
         Self {
             category_id: rc.category_id,
-            category_name: None, // Will be populated by handler
-            category_slug: None, // Will be populated by handler
+            category_name: None,
+            category_slug: None,
             severity: rc.severity,
+            color: None,
+            icon: None,
         }
     }
 }
@@ -64,6 +68,9 @@ pub struct ReportResponseDto {
     /// Tags assigned to this report
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<ReportTagDto>,
+    /// Location display name (for list view)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location_display_name: Option<String>,
 }
 
 impl From<Report> for ReportResponseDto {
@@ -80,8 +87,9 @@ impl From<Report> for ReportResponseDto {
             resolved_at: r.resolved_at,
             created_at: r.created_at,
             updated_at: r.updated_at,
-            categories: Vec::new(), // Will be populated by handler
-            tags: Vec::new(),       // Will be populated by handler
+            categories: Vec::new(),
+            tags: Vec::new(),
+            location_display_name: None,
         }
     }
 }

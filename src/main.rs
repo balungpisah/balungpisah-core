@@ -330,7 +330,6 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let protected_routes = Router::new()
         .merge(auth_routes::protected_routes(Arc::clone(&auth_service)))
         .merge(users_routes::routes(user_profile_service))
-        .merge(regions_routes::routes(region_service))
         .merge(files_routes::routes(file_service))
         .merge(reports_routes::routes(Arc::clone(&report_service)))
         .merge(citizen_agent_routes::routes(
@@ -364,7 +363,8 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
         .merge(expectations_routes::routes(expectation_service))
         .merge(contributors_routes::routes(contributor_service))
         .merge(categories_routes::routes(category_service))
-        .merge(dashboard_routes::routes(Arc::clone(&dashboard_service)));
+        .merge(dashboard_routes::routes(Arc::clone(&dashboard_service)))
+        .merge(regions_routes::routes(region_service));
 
     let app = Router::new()
         .merge(swagger)

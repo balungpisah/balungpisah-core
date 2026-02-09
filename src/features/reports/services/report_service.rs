@@ -238,31 +238,6 @@ impl ReportService {
             AppError::Database(e)
         })
     }
-
-    /// Get location for a report
-    pub async fn get_location(&self, report_id: Uuid) -> Result<Option<ReportLocation>> {
-        sqlx::query_as!(
-            ReportLocation,
-            r#"
-            SELECT
-                id, report_id, raw_input, display_name, lat, lon,
-                osm_id, osm_type, road, neighbourhood, suburb, city, state, postcode, country_code,
-                bounding_box, geocoding_source as "geocoding_source: GeocodingSource",
-                geocoding_score, geocoded_at, created_at,
-                province_id, regency_id, district_id, village_id
-            FROM report_locations
-            WHERE report_id = $1
-            "#,
-            report_id
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to get report location: {:?}", e);
-            AppError::Database(e)
-        })
-    }
-
     /// List reports by user (new workflow - query reports.user_id directly)
     /// Excludes pending (still processing) and rejected reports
     pub async fn list_by_user(&self, user_id: &str) -> Result<Vec<Report>> {
@@ -551,6 +526,135 @@ impl ReportService {
             tracing::error!("Failed to get report tags: {:?}", e);
             AppError::Database(e)
         })
+    }
+
+    /// Get categories for a report with joined category name/slug
+    pub async fn get_categories_with_names(
+        &self,
+        report_id: Uuid,
+    ) -> Result<Vec<crate::features::reports::dtos::ReportCategoryDto>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                rc.category_id,
+                c.name as category_name,
+                c.slug as category_slug,
+                rc.severity as "severity: ReportSeverity",
+                c.color,
+                c.icon
+            FROM report_categories rc
+            JOIN categories c ON c.id = rc.category_id
+            WHERE rc.report_id = $1
+            ORDER BY c.name
+            "#,
+            report_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get report categories with names: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| crate::features::reports::dtos::ReportCategoryDto {
+                category_id: r.category_id,
+                category_name: Some(r.category_name),
+                category_slug: Some(r.category_slug),
+                severity: r.severity,
+                color: r.color,
+                icon: r.icon,
+            })
+            .collect())
+    }
+
+    /// Get location display name for a report (lightweight, for list view)
+    pub async fn get_location_display_name(&self, report_id: Uuid) -> Result<Option<String>> {
+        let row = sqlx::query_scalar!(
+            r#"
+            SELECT display_name
+            FROM report_locations
+            WHERE report_id = $1
+            LIMIT 1
+            "#,
+            report_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get location display name: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        Ok(row.flatten())
+    }
+
+    /// Get location for a report with resolved region names
+    pub async fn get_location_with_regions(
+        &self,
+        report_id: Uuid,
+    ) -> Result<Option<crate::features::reports::dtos::ReportLocationResponseDto>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                rl.id,
+                rl.raw_input,
+                rl.display_name,
+                rl.lat,
+                rl.lon,
+                rl.road,
+                rl.neighbourhood,
+                rl.suburb,
+                rl.city,
+                rl.state,
+                rl.postcode,
+                rl.geocoding_source as "geocoding_source: GeocodingSource",
+                rl.geocoding_score,
+                p.name as "province_name?",
+                rg.name as "regency_name?",
+                d.name as "district_name?",
+                v.name as "village_name?"
+            FROM report_locations rl
+            LEFT JOIN provinces p ON p.id = rl.province_id
+            LEFT JOIN regencies rg ON rg.id = rl.regency_id
+            LEFT JOIN districts d ON d.id = rl.district_id
+            LEFT JOIN villages v ON v.id = rl.village_id
+            WHERE rl.report_id = $1
+            LIMIT 1
+            "#,
+            report_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get report location with regions: {:?}", e);
+            AppError::Database(e)
+        })?;
+
+        Ok(row.map(
+            |r| crate::features::reports::dtos::ReportLocationResponseDto {
+                id: r.id,
+                raw_input: r.raw_input,
+                display_name: r.display_name,
+                lat: r.lat,
+                lon: r.lon,
+                road: r.road,
+                neighbourhood: r.neighbourhood,
+                suburb: r.suburb,
+                city: r.city,
+                state: r.state,
+                postcode: r.postcode,
+                geocoding_source: r.geocoding_source,
+                geocoding_score: r
+                    .geocoding_score
+                    .map(|s| s.to_string().parse().unwrap_or(0.0)),
+                province_name: r.province_name,
+                regency_name: r.regency_name,
+                district_name: r.district_name,
+                village_name: r.village_name,
+            },
+        ))
     }
 
     // ===== Location Region Management =====

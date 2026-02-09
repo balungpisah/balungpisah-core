@@ -9,7 +9,7 @@ use crate::core::error::Result;
 use crate::core::extractor::AppJson;
 use crate::features::auth::model::AuthenticatedUser;
 use crate::features::reports::dtos::{
-    ReportDetailResponseDto, ReportLocationResponseDto, ReportResponseDto, UpdateReportStatusDto,
+    ReportDetailResponseDto, ReportResponseDto, UpdateReportStatusDto,
 };
 use crate::features::reports::services::ReportService;
 use crate::shared::types::ApiResponse;
@@ -36,7 +36,21 @@ pub async fn list_reports(
     State(state): State<ReportState>,
 ) -> Result<Json<ApiResponse<Vec<ReportResponseDto>>>> {
     let reports = state.report_service.list_by_user(&user.sub).await?;
-    let dtos: Vec<ReportResponseDto> = reports.into_iter().map(|r| r.into()).collect();
+    let mut dtos = Vec::with_capacity(reports.len());
+    for r in reports {
+        let id = r.id;
+        let mut dto: ReportResponseDto = r.into();
+        dto.categories = state.report_service.get_categories_with_names(id).await?;
+        dto.tags = state
+            .report_service
+            .get_tags(id)
+            .await?
+            .into_iter()
+            .map(|t| t.into())
+            .collect();
+        dto.location_display_name = state.report_service.get_location_display_name(id).await?;
+        dtos.push(dto);
+    }
     Ok(Json(ApiResponse::success(Some(dtos), None, None)))
 }
 
@@ -71,10 +85,20 @@ pub async fn get_report(
         )));
     }
 
-    let location = state.report_service.get_location(id).await?;
+    let mut report_dto: ReportResponseDto = report.into();
+    report_dto.categories = state.report_service.get_categories_with_names(id).await?;
+    report_dto.tags = state
+        .report_service
+        .get_tags(id)
+        .await?
+        .into_iter()
+        .map(|t| t.into())
+        .collect();
+
+    let location = state.report_service.get_location_with_regions(id).await?;
     let dto = ReportDetailResponseDto {
-        report: report.into(),
-        location: location.map(ReportLocationResponseDto::from),
+        report: report_dto,
+        location,
     };
 
     Ok(Json(ApiResponse::success(Some(dto), None, None)))
