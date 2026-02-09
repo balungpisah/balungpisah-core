@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) as \"count!\"\n            FROM reports\n            WHERE created_at >= CURRENT_DATE - $1::int\n              AND status IN ('draft', 'verified')\n              AND ($2::text IS NULL OR title ILIKE $2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a3cf67dadd96abcf7022e625748293ed87dce0a3c6db52d657ecd949c6304dca"
+}

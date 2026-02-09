@@ -159,16 +159,32 @@ async fn async_main(worker_threads: usize) -> anyhow::Result<()> {
     let file_service = Arc::new(FileService::new(pool.clone(), Arc::clone(&minio_client)));
     tracing::info!("File service initialized");
 
+    // Initialize encryption service
+    let encryption_service = Arc::new(
+        shared::encryption::EncryptionService::new(
+            &config.encryption.key,
+            &config.encryption.hmac_key,
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to initialize encryption service: {}", e))?,
+    );
+    tracing::info!("Encryption service initialized");
+
     // Initialize Region Service
     let region_service = Arc::new(RegionService::new(pool.clone()));
     tracing::info!("Region service initialized");
 
     // Initialize Expectation Service (for landing page)
-    let expectation_service = Arc::new(ExpectationService::new(pool.clone()));
+    let expectation_service = Arc::new(ExpectationService::new(
+        pool.clone(),
+        encryption_service.clone(),
+    ));
     tracing::info!("Expectation service initialized");
 
     // Initialize Contributor Service
-    let contributor_service = Arc::new(ContributorService::new(pool.clone()));
+    let contributor_service = Arc::new(ContributorService::new(
+        pool.clone(),
+        encryption_service.clone(),
+    ));
     tracing::info!("Contributor service initialized");
 
     // Initialize Category Service
