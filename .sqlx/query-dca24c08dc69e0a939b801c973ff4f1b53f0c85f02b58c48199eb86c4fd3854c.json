@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO contributors (\n                submission_type,\n                name, email_encrypted, email_index, whatsapp_encrypted, whatsapp_index, city, role, skills, bio, portfolio_url, aspiration,\n                organization_name, organization_type, contact_name, contact_position,\n                contact_whatsapp_encrypted, contact_whatsapp_index, contact_email_encrypted, contact_email_index, contribution_offer,\n                agreed\n            ) VALUES (\n                $1,\n                $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,\n                $13, $14, $15, $16, $17, $18, $19, $20, $21,\n                $22\n            )\n            RETURNING\n                id, submission_type,\n                name, email_encrypted as email, email_index, whatsapp_encrypted as whatsapp, whatsapp_index,\n                city, role, skills, bio, portfolio_url, aspiration,\n                organization_name, organization_type, contact_name, contact_position,\n                contact_whatsapp_encrypted as contact_whatsapp, contact_whatsapp_index,\n                contact_email_encrypted as contact_email, contact_email_index, contribution_offer,\n                agreed, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO contributors (\n                submission_type,\n                name, email, email_index, whatsapp, whatsapp_index, city, role, skills, bio, portfolio_url, aspiration,\n                organization_name, organization_type, contact_name, contact_position,\n                contact_whatsapp, contact_whatsapp_index, contact_email, contact_email_index, contribution_offer,\n                agreed\n            ) VALUES (\n                $1,\n                $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,\n                $13, $14, $15, $16, $17, $18, $19, $20, $21,\n                $22\n            )\n            RETURNING\n                id, submission_type,\n                name, email, email_index, whatsapp, whatsapp_index,\n                city, role, skills, bio, portfolio_url, aspiration,\n                organization_name, organization_type, contact_name, contact_position,\n                contact_whatsapp, contact_whatsapp_index,\n                contact_email, contact_email_index, contribution_offer,\n                agreed, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -183,5 +183,5 @@
       false
     ]
   },
-  "hash": "42dac08fd59c99e974d50e899a45a851265c5f439ae9c82798c02206b8e0381d"
+  "hash": "dca24c08dc69e0a939b801c973ff4f1b53f0c85f02b58c48199eb86c4fd3854c"
 }

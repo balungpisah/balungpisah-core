@@ -1032,6 +1032,7 @@ impl DashboardService {
         let filters = ParsedFilters::from_params(params);
 
         // --- Total + status breakdown ---
+        // Count ALL draft/verified reports, not just those with coordinates
         let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
             r#"
             SELECT
@@ -1039,12 +1040,12 @@ impl DashboardService {
                 COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'draft') as draft_cnt,
                 COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'verified') as verified_cnt
             FROM reports r
-            INNER JOIN report_locations rl ON rl.report_id = r.id
-            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            LEFT JOIN report_locations rl ON rl.report_id = r.id
+            WHERE 1=1
             "#,
         );
         // For the total query, skip the status filter so we can count all statuses
-        filters.apply_to_skip_status(&mut qb);
+        filters.apply_to_skip_status_and_location(&mut qb);
 
         let stats_row = qb.build().fetch_one(&self.pool).await?;
 
@@ -1061,12 +1062,12 @@ impl DashboardService {
                 rc.severity::text as severity,
                 COUNT(DISTINCT r.id) as cnt
             FROM reports r
-            INNER JOIN report_locations rl ON rl.report_id = r.id
+            LEFT JOIN report_locations rl ON rl.report_id = r.id
             INNER JOIN report_categories rc ON rc.report_id = r.id
-            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            WHERE 1=1
             "#,
         );
-        filters.apply_to(&mut qb);
+        filters.apply_to_skip_status_and_location(&mut qb);
         qb.push(" GROUP BY rc.severity::text");
 
         let sev_rows = qb.build().fetch_all(&self.pool).await?;
@@ -1096,12 +1097,12 @@ impl DashboardService {
                 rt.tag_type::text as tag_type,
                 COUNT(DISTINCT r.id) as cnt
             FROM reports r
-            INNER JOIN report_locations rl ON rl.report_id = r.id
+            LEFT JOIN report_locations rl ON rl.report_id = r.id
             INNER JOIN report_tags rt ON rt.report_id = r.id
-            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            WHERE 1=1
             "#,
         );
-        filters.apply_to(&mut qb);
+        filters.apply_to_skip_status_and_location(&mut qb);
         qb.push(" GROUP BY rt.tag_type::text");
 
         let tag_rows = qb.build().fetch_all(&self.pool).await?;
@@ -1134,13 +1135,13 @@ impl DashboardService {
                 c.name as category_name,
                 COUNT(DISTINCT r.id) as cnt
             FROM reports r
-            INNER JOIN report_locations rl ON rl.report_id = r.id
+            LEFT JOIN report_locations rl ON rl.report_id = r.id
             INNER JOIN report_categories rc ON rc.report_id = r.id
             INNER JOIN categories c ON c.id = rc.category_id
-            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            WHERE 1=1
             "#,
         );
-        filters.apply_to(&mut qb);
+        filters.apply_to_skip_status_and_location(&mut qb);
         qb.push(" GROUP BY c.id, c.name ORDER BY cnt DESC LIMIT 10");
 
         let cat_rows = qb.build().fetch_all(&self.pool).await?;
@@ -1161,12 +1162,11 @@ impl DashboardService {
                 TO_CHAR(date_trunc('week', r.created_at), 'IYYY-"W"IW') as week,
                 COUNT(DISTINCT r.id) as cnt
             FROM reports r
-            INNER JOIN report_locations rl ON rl.report_id = r.id
-            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
-                AND r.created_at >= NOW() - INTERVAL '12 weeks'
+            LEFT JOIN report_locations rl ON rl.report_id = r.id
+            WHERE r.created_at >= NOW() - INTERVAL '12 weeks'
             "#,
         );
-        filters.apply_to(&mut qb);
+        filters.apply_to_skip_status_and_location(&mut qb);
         qb.push(
             " GROUP BY date_trunc('week', r.created_at) ORDER BY date_trunc('week', r.created_at)",
         );
@@ -1189,12 +1189,12 @@ impl DashboardService {
                 p.name as region_name,
                 COUNT(DISTINCT r.id) as cnt
             FROM reports r
-            INNER JOIN report_locations rl ON rl.report_id = r.id
-            INNER JOIN provinces p ON p.id = rl.province_id
-            WHERE rl.lat IS NOT NULL AND rl.lon IS NOT NULL
+            LEFT JOIN report_locations rl ON rl.report_id = r.id
+            LEFT JOIN provinces p ON p.id = rl.province_id
+            WHERE p.id IS NOT NULL
             "#,
         );
-        filters.apply_to(&mut qb);
+        filters.apply_to_skip_status_and_location(&mut qb);
         qb.push(" GROUP BY p.id, p.name ORDER BY cnt DESC LIMIT 10");
 
         let region_rows = qb.build().fetch_all(&self.pool).await?;
@@ -1715,11 +1715,76 @@ impl ParsedFilters {
         }
     }
 
-    /// Same as apply_to but skips status filter (used for total/status breakdown)
-    fn apply_to_skip_status<'a>(&'a self, qb: &mut sqlx::QueryBuilder<'a, sqlx::Postgres>) {
-        self.apply_common(qb);
+    /// Skip status filter and don't require location with coordinates
+    /// Used for total count that includes all reports (with or without location)
+    fn apply_to_skip_status_and_location<'a>(
+        &'a self,
+        qb: &mut sqlx::QueryBuilder<'a, sqlx::Postgres>,
+    ) {
+        self.apply_common_skip_location(qb);
         // Default: only draft and verified
         qb.push(" AND r.status::text IN ('draft', 'verified')");
+    }
+
+    /// Common filters but skip location requirement (for total count)
+    fn apply_common_skip_location<'a>(&'a self, qb: &mut sqlx::QueryBuilder<'a, sqlx::Postgres>) {
+        // Region filters (but allow NULL locations)
+        if let Some(province_id) = self.province_id {
+            qb.push(" AND rl.province_id = ");
+            qb.push_bind(province_id);
+        }
+        if let Some(regency_id) = self.regency_id {
+            qb.push(" AND rl.regency_id = ");
+            qb.push_bind(regency_id);
+        }
+        if let Some(district_id) = self.district_id {
+            qb.push(" AND rl.district_id = ");
+            qb.push_bind(district_id);
+        }
+        if let Some(village_id) = self.village_id {
+            qb.push(" AND rl.village_id = ");
+            qb.push_bind(village_id);
+        }
+
+        // Category filter
+        if !self.category_ids.is_empty() {
+            qb.push(
+                " AND EXISTS (SELECT 1 FROM report_categories rc2 WHERE rc2.report_id = r.id AND rc2.category_id = ANY(",
+            );
+            qb.push_bind(&self.category_ids);
+            qb.push("))");
+        }
+
+        // Severity filter
+        if !self.severities.is_empty() {
+            qb.push(
+                " AND EXISTS (SELECT 1 FROM report_categories rc3 WHERE rc3.report_id = r.id AND rc3.severity::text = ANY(",
+            );
+            qb.push_bind(&self.severities);
+            qb.push("))");
+        }
+
+        // Tag types filter
+        if !self.tag_types.is_empty() {
+            qb.push(
+                " AND EXISTS (SELECT 1 FROM report_tags rt2 WHERE rt2.report_id = r.id AND rt2.tag_type::text = ANY(",
+            );
+            qb.push_bind(&self.tag_types);
+            qb.push("))");
+        }
+
+        // Date range filters
+        if let Some(date_from) = self.date_from {
+            qb.push(" AND r.created_at >= ");
+            qb.push_bind(date_from);
+        }
+        if let Some(date_to) = self.date_to {
+            qb.push(" AND r.created_at < (");
+            qb.push_bind(date_to);
+            qb.push(" + INTERVAL '1 day')");
+        }
+
+        // Skip bounds filter for total count (we want ALL reports regardless of location)
     }
 
     fn apply_common<'a>(&'a self, qb: &mut sqlx::QueryBuilder<'a, sqlx::Postgres>) {

@@ -69,9 +69,9 @@ impl ContributorService {
             r#"
             INSERT INTO contributors (
                 submission_type,
-                name, email_encrypted, email_index, whatsapp_encrypted, whatsapp_index, city, role, skills, bio, portfolio_url, aspiration,
+                name, email, email_index, whatsapp, whatsapp_index, city, role, skills, bio, portfolio_url, aspiration,
                 organization_name, organization_type, contact_name, contact_position,
-                contact_whatsapp_encrypted, contact_whatsapp_index, contact_email_encrypted, contact_email_index, contribution_offer,
+                contact_whatsapp, contact_whatsapp_index, contact_email, contact_email_index, contribution_offer,
                 agreed
             ) VALUES (
                 $1,
@@ -81,11 +81,11 @@ impl ContributorService {
             )
             RETURNING
                 id, submission_type,
-                name, email_encrypted as email, email_index, whatsapp_encrypted as whatsapp, whatsapp_index,
+                name, email, email_index, whatsapp, whatsapp_index,
                 city, role, skills, bio, portfolio_url, aspiration,
                 organization_name, organization_type, contact_name, contact_position,
-                contact_whatsapp_encrypted as contact_whatsapp, contact_whatsapp_index,
-                contact_email_encrypted as contact_email, contact_email_index, contribution_offer,
+                contact_whatsapp, contact_whatsapp_index,
+                contact_email, contact_email_index, contribution_offer,
                 agreed, created_at, updated_at
             "#,
             dto.submission_type,

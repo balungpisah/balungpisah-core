@@ -21,12 +21,12 @@
       {
         "ordinal": 3,
         "name": "email",
-        "type_info": "Varchar"
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
         "name": "whatsapp",
-        "type_info": "Varchar"
+        "type_info": "Text"
       },
       {
         "ordinal": 5,
@@ -81,12 +81,12 @@
       {
         "ordinal": 15,
         "name": "contact_whatsapp",
-        "type_info": "Varchar"
+        "type_info": "Text"
       },
       {
         "ordinal": 16,
         "name": "contact_email",
-        "type_info": "Varchar"
+        "type_info": "Text"
       },
       {
         "ordinal": 17,

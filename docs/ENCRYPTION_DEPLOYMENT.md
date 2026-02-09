@@ -127,9 +127,10 @@ Location: `src/bin/migrate_pii_encryption.rs`
 
 ---
 
-## Phase 3: Cleanup (Future - Manual)
+## Phase 3: Cleanup ✅ (Ready for Deployment)
 
-**Status**: Not started
+**Status**: Implemented and ready for deployment
+**Date**: 2026-02-09
 **Timeline**: After Phase 2 + 1-2 week soak period
 
 ### Prerequisites
@@ -139,100 +140,180 @@ Location: `src/bin/migrate_pii_encryption.rs`
 - Application stable with encrypted data
 - Soak period completed (1-2 weeks monitoring)
 
-### Migration to Run
+### What Was Implemented
 
-**Migration 4**: `DROP` plaintext columns and `RENAME` encrypted columns
+1. **Database Migration** (`migrations/20260209175654_cleanup_pii_encryption.sql`)
+   - Drops plaintext PII columns from `expectations` and `contributors` tables
+   - Renames `*_encrypted` columns to original column names
+   - Updates column comments to document encryption format
+   - Includes safety checks with `DROP COLUMN IF EXISTS`
 
-**File**: Was deleted from migrations - needs to be created as manual migration
+2. **Application Code Updates**
+   - `ExpectationService`: Query updated to use `email` column (no longer `email_encrypted`)
+   - `ContributorService`: All 4 PII field queries updated to use original column names
+   - Removed `AS` aliases from `RETURNING` clauses
+
+### Migration File
+
+**File**: `migrations/20260209175654_cleanup_pii_encryption.sql`
+
+This migration will run automatically with `sqlx migrate run` or on application startup.
 
 ### Steps
 
-1. **Create Manual Migration**
+1. **Verify Prerequisites**
 
-   Create file: `migrations/MANUAL_drop_plaintext_pii_columns.sql`
+   Before running this migration, ensure:
 
-   ```sql
-   -- ============================================================================
-   -- EXPECTATIONS TABLE
-   -- ============================================================================
+   - ✅ Phase 2 data migration completed successfully
+   - ✅ All plaintext columns are NULL (verified with database queries)
+   - ✅ Application has been stable with encrypted data for 1-2 weeks
+   - ✅ Database backup taken
 
-   -- Drop original plaintext email column
-   ALTER TABLE expectations DROP COLUMN IF EXISTS email;
-
-   -- Rename encrypted column to original name
-   ALTER TABLE expectations RENAME COLUMN email_encrypted TO email;
-
-   -- Update column comment
-   COMMENT ON COLUMN expectations.email IS 'AES-256-GCM encrypted email (format: nonce:ciphertext, base64)';
-
-   -- ============================================================================
-   -- CONTRIBUTORS TABLE
-   -- ============================================================================
-
-   -- Drop original plaintext PII columns
-   ALTER TABLE contributors
-   DROP COLUMN IF EXISTS email,
-   DROP COLUMN IF EXISTS whatsapp,
-   DROP COLUMN IF EXISTS contact_email,
-   DROP COLUMN IF EXISTS contact_whatsapp;
-
-   -- Rename encrypted columns to original names
-   ALTER TABLE contributors RENAME COLUMN email_encrypted TO email;
-   ALTER TABLE contributors RENAME COLUMN whatsapp_encrypted TO whatsapp;
-   ALTER TABLE contributors RENAME COLUMN contact_email_encrypted TO contact_email;
-   ALTER TABLE contributors RENAME COLUMN contact_whatsapp_encrypted TO contact_whatsapp;
-
-   -- Update column comments
-   COMMENT ON COLUMN contributors.email IS 'AES-256-GCM encrypted email (format: nonce:ciphertext, base64)';
-   COMMENT ON COLUMN contributors.whatsapp IS 'AES-256-GCM encrypted whatsapp (format: nonce:ciphertext, base64)';
-   COMMENT ON COLUMN contributors.contact_email IS 'AES-256-GCM encrypted contact_email (format: nonce:ciphertext, base64)';
-   COMMENT ON COLUMN contributors.contact_whatsapp IS 'AES-256-GCM encrypted contact_whatsapp (format: nonce:ciphertext, base64)';
-   ```
-
-2. **Update Application Code**
-
-   After running the cleanup migration, update the service queries to remove the `AS` aliases:
-
-   **ExpectationService** (`src/features/expectations/services/expectation_service.rs`):
-   ```rust
-   // Change from:
-   INSERT INTO expectations (name, email_encrypted, email_index, expectation)
-   RETURNING id, name, email_encrypted as email, email_index, expectation, created_at
-
-   // To:
-   INSERT INTO expectations (name, email, email_index, expectation)
-   RETURNING id, name, email, email_index, expectation, created_at
-   ```
-
-   **ContributorService** (`src/features/contributors/services/contributor_service.rs`):
-   ```rust
-   // Remove all `*_encrypted` column references and aliases
-   // Change INSERT columns from *_encrypted to original names
-   // Remove AS aliases from RETURNING clause
-   ```
-
-3. **Deployment Process**
+2. **Take Database Backup**
 
    ```bash
-   # 1. Backup database
-   pg_dump $DATABASE_URL > backup_before_cleanup.sql
+   # CRITICAL: Take a full database backup before proceeding
+   pg_dump $DATABASE_URL > backup_before_phase3_cleanup.sql
 
-   # 2. Run manual migration
-   psql $DATABASE_URL < migrations/MANUAL_drop_plaintext_pii_columns.sql
-
-   # 3. Update sqlx metadata
-   cargo sqlx prepare
-
-   # 4. Deploy updated application code
-
-   # 5. Verify application starts and works correctly
+   # Verify backup was created successfully
+   ls -lh backup_before_phase3_cleanup.sql
    ```
 
-4. **Verification**
-   - Check table structure (plaintext columns should be gone)
-   - Verify encrypted columns renamed correctly
-   - Test API endpoints (create/read operations)
-   - Monitor logs for errors
+3. **Deploy Application with Migration**
+
+   The migration will run automatically when the application starts (via `sqlx migrate run`).
+
+   **For Production Deployment:**
+   ```bash
+   # Deploy using deployment script
+   ./scripts/deploy.sh production
+   ```
+
+   **For Docker Deployments:**
+   ```bash
+   # Pull latest code
+   git pull origin main
+
+   # Rebuild and restart containers
+   docker-compose down
+   docker-compose up -d --build
+
+   # Migration runs automatically on startup
+   ```
+
+4. **Verify Migration Success**
+
+   ```bash
+   # Check application logs
+   docker logs <container-name> | grep migration
+
+   # Should see: "Applied migration: 20260209175654_cleanup_pii_encryption"
+   ```
+
+5. **Verify Database Schema**
+
+   ```sql
+   -- Check expectations table
+   SELECT column_name, data_type
+   FROM information_schema.columns
+   WHERE table_name = 'expectations'
+   AND column_name LIKE '%email%';
+
+   -- Should only see: email (TEXT), email_index (VARCHAR)
+   -- Should NOT see: email_encrypted
+
+   -- Check contributors table
+   SELECT column_name, data_type
+   FROM information_schema.columns
+   WHERE table_name = 'contributors'
+   AND column_name IN ('email', 'whatsapp', 'contact_email', 'contact_whatsapp');
+
+   -- All should be TEXT (encrypted columns)
+   ```
+
+6. **Test Application**
+
+   ```bash
+   # Create a test expectation
+   curl -X POST http://your-api/api/expectations \
+     -H "Content-Type: application/json" \
+     -d '{"name": "Test User", "email": "test@example.com", "expectation": "Test"}'
+
+   # Create a test contributor
+   curl -X POST http://your-api/api/contributors/register \
+     -H "Content-Type: application/json" \
+     -d '{"submission_type": "individual", "name": "Test", "email": "test@example.com", ...}'
+
+   # Verify responses include decrypted data
+   ```
+
+7. **Update SQLx Offline Metadata** (for CI/CD)
+
+   After successful deployment, update the offline query metadata:
+   ```bash
+   cargo sqlx prepare
+   git add .sqlx/
+   git commit -m "chore: update sqlx metadata after Phase 3 migration"
+   git push
+   ```
+
+### Rollback Plan
+
+**IMPORTANT**: This migration is **destructive** - it drops plaintext columns permanently.
+
+**If issues arise after deployment:**
+
+1. **Restore from backup** (taken in step 2)
+   ```bash
+   # Stop application
+   docker-compose down
+
+   # Restore database
+   psql $DATABASE_URL < backup_before_phase3_cleanup.sql
+
+   # Revert to previous application version
+   git revert HEAD
+   ./scripts/deploy.sh production
+   ```
+
+2. **The plaintext columns will be restored** with NULL values
+3. **Encrypted columns will be restored** with their names: `*_encrypted`
+4. **Application will continue working** with Phase 1/2 code
+
+**Prevention**: Only run this migration after confirming Phase 2 is stable for 1-2 weeks.
+
+### Post-Deployment Checklist
+
+- [ ] Database backup verified before deployment
+- [ ] Migration ran successfully (check logs)
+- [ ] Plaintext columns dropped (verified via database query)
+- [ ] Encrypted columns renamed to original names
+- [ ] Application started without errors
+- [ ] Create/read operations work correctly
+- [ ] API responses contain decrypted data
+- [ ] No PII in application logs
+- [ ] SQLx offline metadata updated
+
+### Final State After Phase 3
+
+**Database Schema:**
+- `expectations.email` - AES-256-GCM encrypted (TEXT)
+- `expectations.email_index` - HMAC blind index (VARCHAR 64)
+- `contributors.email`, `whatsapp`, `contact_email`, `contact_whatsapp` - All encrypted (TEXT)
+- Corresponding `*_index` columns for blind indexes
+
+**Application Behavior:**
+- All PII fields encrypted before INSERT
+- All PII fields decrypted for API responses
+- Blind indexes used for equality searches
+- No plaintext PII stored in database
+- No PII in application logs
+
+**Migration History:**
+1. ✅ Phase 1: Added encrypted columns alongside plaintext
+2. ✅ Phase 2: Migrated existing data to encrypted columns
+3. ✅ Phase 3: Dropped plaintext columns and renamed encrypted columns
 
 ---
 
