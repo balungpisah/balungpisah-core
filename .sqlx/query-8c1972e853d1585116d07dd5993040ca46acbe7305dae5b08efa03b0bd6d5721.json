@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO expectations (name, email_encrypted, email_index, expectation)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, name, email_encrypted as email, email_index, expectation, created_at\n            ",
+  "query": "\n            INSERT INTO expectations (name, email, email_index, expectation)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, name, email, email_index, expectation, created_at\n            ",
   "describe": {
     "columns": [
       {
@@ -51,5 +51,5 @@
       false
     ]
   },
-  "hash": "08ae87958db2010f11161a2790dfb4dbafd13d0de54098882d441cd5a5a546a1"
+  "hash": "8c1972e853d1585116d07dd5993040ca46acbe7305dae5b08efa03b0bd6d5721"
 }
