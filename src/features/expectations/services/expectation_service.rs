@@ -34,9 +34,9 @@ impl ExpectationService {
         let expectation = sqlx::query_as!(
             Expectation,
             r#"
-            INSERT INTO expectations (name, email_encrypted, email_index, expectation)
+            INSERT INTO expectations (name, email, email_index, expectation)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, name, email_encrypted as email, email_index, expectation, created_at
+            RETURNING id, name, email, email_index, expectation, created_at
             "#,
             dto.name,
             email_encrypted,
