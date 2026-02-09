@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                rc.category_id,\n                c.name as category_name,\n                c.slug as category_slug,\n                rc.severity as \"severity: ReportSeverity\",\n                c.color,\n                c.icon\n            FROM report_categories rc\n            JOIN categories c ON c.id = rc.category_id\n            WHERE rc.report_id = $1\n            ORDER BY c.name\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "category_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "category_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "category_slug",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "severity: ReportSeverity",
+        "type_info": {
+          "Custom": {
+            "name": "report_severity",
+            "kind": {
+              "Enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "color",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "icon",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "d3529d141a77bd4b5dd21040dda65137396efa3b82a9c3af7934894e403cddfb"
+}
