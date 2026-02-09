@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO expectations (name, email_encrypted, email_index, expectation)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, name, email_encrypted as email, email_index, expectation, created_at\n            ",
+  "query": "\n            INSERT INTO expectations (name, email, expectation)\n            VALUES ($1, $2, $3)\n            RETURNING id, name, email, expectation, created_at\n            ",
   "describe": {
     "columns": [
       {
@@ -16,20 +16,15 @@
       {
         "ordinal": 2,
         "name": "email",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 3,
-        "name": "email_index",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "expectation",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -37,7 +32,6 @@
     "parameters": {
       "Left": [
         "Varchar",
-        "Text",
         "Varchar",
         "Text"
       ]
@@ -46,10 +40,9 @@
       false,
       true,
       true,
-      true,
       false,
       false
     ]
   },
-  "hash": "08ae87958db2010f11161a2790dfb4dbafd13d0de54098882d441cd5a5a546a1"
+  "hash": "18c4a7e0740de10074a50dfc03619331456b9d2e2e2b55bcb71f7055ca1c7fe7"
 }

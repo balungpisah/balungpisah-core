@@ -14,9 +14,7 @@ pub struct Contributor {
     // Personal fields
     pub name: Option<String>,
     pub email: Option<String>,
-    pub email_index: Option<String>,
     pub whatsapp: Option<String>,
-    pub whatsapp_index: Option<String>,
     pub city: Option<String>,
     pub role: Option<String>,
     pub skills: Option<String>,
@@ -30,9 +28,7 @@ pub struct Contributor {
     pub contact_name: Option<String>,
     pub contact_position: Option<String>,
     pub contact_whatsapp: Option<String>,
-    pub contact_whatsapp_index: Option<String>,
     pub contact_email: Option<String>,
-    pub contact_email_index: Option<String>,
     pub contribution_offer: Option<String>,
 
     // Common

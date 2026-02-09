@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO contributors (\n                submission_type,\n                name, email_encrypted, email_index, whatsapp_encrypted, whatsapp_index, city, role, skills, bio, portfolio_url, aspiration,\n                organization_name, organization_type, contact_name, contact_position,\n                contact_whatsapp_encrypted, contact_whatsapp_index, contact_email_encrypted, contact_email_index, contribution_offer,\n                agreed\n            ) VALUES (\n                $1,\n                $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,\n                $13, $14, $15, $16, $17, $18, $19, $20, $21,\n                $22\n            )\n            RETURNING\n                id, submission_type,\n                name, email_encrypted as email, email_index, whatsapp_encrypted as whatsapp, whatsapp_index,\n                city, role, skills, bio, portfolio_url, aspiration,\n                organization_name, organization_type, contact_name, contact_position,\n                contact_whatsapp_encrypted as contact_whatsapp, contact_whatsapp_index,\n                contact_email_encrypted as contact_email, contact_email_index, contribution_offer,\n                agreed, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO contributors (\n                submission_type,\n                name, email, whatsapp, city, role, skills, bio, portfolio_url, aspiration,\n                organization_name, organization_type, contact_name, contact_position,\n                contact_whatsapp, contact_email, contribution_offer,\n                agreed\n            ) VALUES (\n                $1,\n                $2, $3, $4, $5, $6, $7, $8, $9, $10,\n                $11, $12, $13, $14, $15, $16, $17,\n                $18\n            )\n            RETURNING *\n            ",
   "describe": {
     "columns": [
       {
@@ -21,121 +21,99 @@
       {
         "ordinal": 3,
         "name": "email",
-        "type_info": "Text"
+        "type_info": "Varchar"
       },
       {
         "ordinal": 4,
-        "name": "email_index",
+        "name": "whatsapp",
         "type_info": "Varchar"
       },
       {
         "ordinal": 5,
-        "name": "whatsapp",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
-        "name": "whatsapp_index",
-        "type_info": "Varchar"
-      },
-      {
-        "ordinal": 7,
         "name": "city",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "role",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "skills",
         "type_info": "Text"
       },
       {
-        "ordinal": 10,
-        "name": "bio",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 11,
+        "ordinal": 8,
         "name": "portfolio_url",
         "type_info": "Text"
       },
       {
-        "ordinal": 12,
+        "ordinal": 9,
         "name": "aspiration",
         "type_info": "Text"
       },
       {
-        "ordinal": 13,
+        "ordinal": 10,
         "name": "organization_name",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 14,
+        "ordinal": 11,
         "name": "organization_type",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 15,
+        "ordinal": 12,
         "name": "contact_name",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 16,
+        "ordinal": 13,
         "name": "contact_position",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 17,
+        "ordinal": 14,
         "name": "contact_whatsapp",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 18,
-        "name": "contact_whatsapp_index",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 19,
+        "ordinal": 15,
         "name": "contact_email",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 20,
-        "name": "contact_email_index",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 21,
+        "ordinal": 16,
         "name": "contribution_offer",
         "type_info": "Text"
       },
       {
-        "ordinal": 22,
+        "ordinal": 17,
         "name": "agreed",
         "type_info": "Bool"
       },
       {
-        "ordinal": 23,
+        "ordinal": 18,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 24,
+        "ordinal": 19,
         "name": "updated_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "bio",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
         "Varchar",
         "Varchar",
-        "Text",
         "Varchar",
-        "Text",
         "Varchar",
         "Varchar",
         "Varchar",
@@ -147,9 +125,7 @@
         "Varchar",
         "Varchar",
         "Varchar",
-        "Text",
         "Varchar",
-        "Text",
         "Varchar",
         "Text",
         "Bool"
@@ -173,15 +149,11 @@
       true,
       true,
       true,
-      true,
-      true,
-      true,
-      true,
-      true,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "42dac08fd59c99e974d50e899a45a851265c5f439ae9c82798c02206b8e0381d"
+  "hash": "76006bdfd83b1c2eafdeddeeacb183d12605d40b0de74ad78551fddebe3b16ca"
 }

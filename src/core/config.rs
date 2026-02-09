@@ -1,4 +1,3 @@
-use base64::Engine;
 use std::env;
 use std::time::Duration;
 
@@ -13,7 +12,6 @@ pub struct Config {
     pub logto_m2m: LogtoM2MConfig,
     pub minio: MinIOConfig,
     pub agent_gateway: AgentGatewayConfig,
-    pub encryption: EncryptionConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -117,41 +115,6 @@ pub struct MinIOConfig {
     pub presigned_url_expiry_secs: u32,
 }
 
-/// Configuration for AES-256-GCM field-level encryption
-#[derive(Debug, Clone)]
-pub struct EncryptionConfig {
-    pub key: Vec<u8>,
-    pub hmac_key: Vec<u8>,
-}
-
-impl EncryptionConfig {
-    pub fn from_env() -> Result<Self, String> {
-        let key_b64 = env::var("ENCRYPTION_KEY")
-            .map_err(|_| "ENCRYPTION_KEY environment variable is required".to_string())?;
-
-        let key = base64::engine::general_purpose::STANDARD
-            .decode(&key_b64)
-            .map_err(|_| "ENCRYPTION_KEY must be valid base64".to_string())?;
-
-        if key.len() != 32 {
-            return Err("ENCRYPTION_KEY must be 32 bytes (256 bits)".to_string());
-        }
-
-        let hmac_key_b64 = env::var("ENCRYPTION_HMAC_KEY")
-            .map_err(|_| "ENCRYPTION_HMAC_KEY environment variable is required".to_string())?;
-
-        let hmac_key = base64::engine::general_purpose::STANDARD
-            .decode(&hmac_key_b64)
-            .map_err(|_| "ENCRYPTION_HMAC_KEY must be valid base64".to_string())?;
-
-        if hmac_key.len() != 32 {
-            return Err("ENCRYPTION_HMAC_KEY must be 32 bytes (256 bits)".to_string());
-        }
-
-        Ok(Self { key, hmac_key })
-    }
-}
-
 impl Config {
     pub fn from_env() -> Result<Self, String> {
         // Load .env file if exists, ignore if not found (optional for production)
@@ -171,7 +134,6 @@ impl Config {
             logto_m2m: LogtoM2MConfig::from_env()?,
             minio: MinIOConfig::from_env()?,
             agent_gateway: AgentGatewayConfig::from_env()?,
-            encryption: EncryptionConfig::from_env()?,
         })
     }
 }
