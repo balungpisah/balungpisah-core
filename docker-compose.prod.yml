@@ -15,7 +15,15 @@ services:
   app:
     container_name: ${CONTAINER_NAME:-balungpisah-core}
     image: ${IMAGE_REGISTRY:-ghcr.io/balungpisah/balungpisah-core}:${IMAGE_TAG:-latest}
-    network_mode: host
     env_file:
       - .env
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PORT:-3030}:${PORT:-3030}"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    name: ${DOCKER_NETWORK_NAME}
+    external: true
